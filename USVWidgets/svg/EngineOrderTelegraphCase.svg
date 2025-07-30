@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="uuid-70f4c5d9-d3fe-4aed-80f3-effd9e3321a1" data-name="图层 6" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 140 240">
+  <defs>
+    <style>
+      .uuid-99bc8cab-5496-4bd3-9e1c-81cad431dbb0 {
+        fill: url(#uuid-86d64f06-6306-44dc-92c0-1f5a326c50b6);
+      }
+
+      .uuid-74db107f-49f2-4c9b-81ab-b6a2a5de02f8 {
+        fill: url(#uuid-799ac85b-299f-4c40-ba62-3643023f11ba);
+      }
+    </style>
+    <linearGradient id="uuid-799ac85b-299f-4c40-ba62-3643023f11ba" data-name="未命名的渐变 8" x1="70" y1="122.06" x2="70" y2="3" gradientUnits="userSpaceOnUse">
+      <stop offset=".09" stop-color="#fff" stop-opacity=".3"/>
+      <stop offset=".34" stop-color="#000" stop-opacity="0"/>
+      <stop offset=".93" stop-color="#000" stop-opacity=".6"/>
+    </linearGradient>
+    <linearGradient id="uuid-86d64f06-6306-44dc-92c0-1f5a326c50b6" data-name="未命名的渐变 10" x1="70" y1="240.06" x2="70" y2="121" gradientTransform="translate(0 2)" gradientUnits="userSpaceOnUse">
+      <stop offset=".01" stop-color="#fff" stop-opacity=".3"/>
+      <stop offset=".24" stop-color="#000" stop-opacity="0"/>
+      <stop offset=".99" stop-color="#000"/>
+    </linearGradient>
+  </defs>
+  <rect class="uuid-74db107f-49f2-4c9b-81ab-b6a2a5de02f8" x="0" width="140" height="120"/>
+  <rect class="uuid-99bc8cab-5496-4bd3-9e1c-81cad431dbb0" x="0" y="120" width="140" height="120" transform="translate(140 360) rotate(-180)"/>
+</svg>
