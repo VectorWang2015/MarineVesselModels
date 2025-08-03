@@ -2,36 +2,41 @@ import sys
 import numpy as np
 from PyQt6 import QtWidgets, QtGui, QtCore
 from PyQt6.QtWidgets import (
-    QHBoxLayout, QVBoxLayout, QWidget,
+    QHBoxLayout, QVBoxLayout, QWidget, QFormLayout,
     QLabel, QPlainTextEdit, QSlider, QPushButton,
+    QLineEdit,
 )
 
-from USVWidgets.canvas import KVLCCCanvas
+from USVWidgets.canvas import ShipCanvas, usv_30pix_poly
 from USVWidgets.control import EngineOrderTele
 from USVWidgets.palette_dark import darkPalette
 from xinput_support import get_control
+
+from MarineVesselModels.simulator import FossenSimulator
+from MarineVesselModels.thrusters import NaiveDoubleThruster
 
 pool_width = 1600
 pool_height = 900
 
 
 class simulatorWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, hydro_params, b):
         """
-        canvas 1600x900 -> -80m~80m, -45mx45m
-        - [ ] scale
-        - [ ] rebuild ui
+        hydro_params: hydo parameters for simualtion
+        b: width of the USV
         """
         super().__init__()
-
+        self.hydro_params = hydro_params
+        self.b = b
 
         self.canvasLayout = QHBoxLayout()
         self.infoLayout = QVBoxLayout()
         self.inputLayout = QVBoxLayout()
         self.eotLayout = QHBoxLayout()
         self.buttonsLayout = QHBoxLayout()
+        self.uvrLayout = QFormLayout()
 
-        self.canvas = KVLCCCanvas(pool_height=pool_height, pool_width=pool_width)
+        self.canvas = ShipCanvas(pool_height=pool_height, pool_width=pool_width, meter_to_pixel_scale=30, model=usv_30pix_poly)
 
         self.StartButton = QPushButton("Start")
         self.SuspendButton = QPushButton("Suspend")
@@ -42,6 +47,20 @@ class simulatorWindow(QtWidgets.QMainWindow):
         self.InfoBox.setReadOnly(True)
         self.InfoBox.setMaximumHeight(200)
 
+        self.Lu = QLabel("u: ")
+        self.Lv = QLabel("v: ")
+        self.Lr = QLabel("r: ")
+        self.LEu = QLineEdit()
+        self.LEv = QLineEdit()
+        self.LEr = QLineEdit()
+        self.LEu.setReadOnly(True)
+        self.LEv.setReadOnly(True)
+        self.LEr.setReadOnly(True)
+
+        self.uvrLayout.addRow(self.Lu, self.LEu)
+        self.uvrLayout.addRow(self.Lv, self.LEv)
+        self.uvrLayout.addRow(self.Lr, self.LEr)
+
         self.left_EOT = EngineOrderTele(value_lim=100)
         self.right_EOT = EngineOrderTele(value_lim=100)
         self.left_EOT.setEnabled(False)
@@ -51,6 +70,7 @@ class simulatorWindow(QtWidgets.QMainWindow):
         self.canvasLayout.addLayout(self.infoLayout)
 
         self.infoLayout.addWidget(self.InfoBox)
+        self.infoLayout.addLayout(self.uvrLayout)
         self.infoLayout.addStretch()
         self.infoLayout.addLayout(self.inputLayout)
         self.infoLayout.addStretch()
@@ -83,14 +103,8 @@ class simulatorWindow(QtWidgets.QMainWindow):
         self.left_EOT.valueChanged.connect(self.left_EOT_changed)
         self.right_EOT.valueChanged.connect(self.right_EOT_changed)
 
-        """
-        self.CurrentControlSlider.setValue(self.delta)
-        self.InputControlSlider.setValue(self.desire_delta)
-
-        self.InputControlSlider.valueChanged.connect(self.slider_input_changed)
-
-        """
         self.first_start = True
+        self.simulating = False
         # msec
         self.simul_time_period = 10
         self.ui_refresh = 50
@@ -100,15 +114,16 @@ class simulatorWindow(QtWidgets.QMainWindow):
         self.ui_timer = QtCore.QTimer(self)
         self.control_timer = QtCore.QTimer(self)
 
-        #self.simul_timer.setInterval(self.simul_time_period)
-        #self.ui_timer.setInterval(self.ui_refresh)
+        self.simul_timer.setInterval(self.simul_time_period)
+        self.ui_timer.setInterval(self.ui_refresh)
         self.control_timer.setInterval(self.control_refresh)
 
-        #self.simul_timer.timeout.connect(self.simulator_step)
-        #self.ui_timer.timeout.connect(self.refresh_canvas)
+        self.simul_timer.timeout.connect(self.simulator_step)
+        self.ui_timer.timeout.connect(self.refresh_canvas)
         self.control_timer.timeout.connect(self.refresh_control)
 
     def suspend_clicked(self):
+        self.simulating = False
         self.StartButton.setEnabled(True)
         self.SuspendButton.setEnabled(False)
         self.left_EOT.setEnabled(False)
@@ -120,6 +135,9 @@ class simulatorWindow(QtWidgets.QMainWindow):
 
         self.setStyleSheet(
             "QPlainTextEdit {background-color: red;}"
+        )
+        self.setStyleSheet(
+            "QLineEdit {background-color: red;}"
         )
 
     def start_clicked(self):
@@ -134,19 +152,21 @@ class simulatorWindow(QtWidgets.QMainWindow):
             self.uEdit.setEnabled(False)
             self.vEdit.setEnabled(False)
             self.psiEdit.setEnabled(False)
-
-            self.current_state = np.array([0, 0, psi, u, v, 0]).reshape([6, 1])
-            # self.current_state = ShipState(x=0, y=0, psi=psi, u=u, v=v, r=0)
-            # self.simulator = KVLCC2(
-            #     x=0,
-            #     y=0,
-            #     u=u,
-            #     v=v,
-            #     psi=psi,
-            #     fixed_time_step=self.simul_time_period / 1000,
-            # )
             """
 
+            #self.current_state = np.array([0, 0, psi, u, v, 0]).reshape([6, 1])
+            self.current_state = np.array([0, 0, 0, 0, 0, 0]).reshape([6, 1])
+            self.simulator = FossenSimulator(
+                self.hydro_params,
+                time_step=self.simul_time_period/1000,
+                init_state=self.current_state,
+            )
+            self.thruster = NaiveDoubleThruster(b=self.b)
+
+            # monitor keyboard
+            self.installEventFilter(self)
+
+        self.simulating = True
         self.StartButton.setEnabled(False)
         self.SuspendButton.setEnabled(True)
 
@@ -159,6 +179,9 @@ class simulatorWindow(QtWidgets.QMainWindow):
 
         self.setStyleSheet(
             "QPlainTextEdit {background-color: green;}"
+        )
+        self.setStyleSheet(
+            "QLineEdit {background-color: green;}"
         )
 
     def switch_clicked(self):
@@ -195,21 +218,83 @@ class simulatorWindow(QtWidgets.QMainWindow):
             else:
                 self.add_line_to_info("Xbox controller undetected!")
 
-    """
+    def update_uvr(self):
+        u = self.current_state[3][0],
+        v = self.current_state[4][0],
+        r = self.current_state[5][0],
+        self.LEu.setText(f"{u}")
+        self.LEv.setText(f"{v}")
+        self.LEr.setText(f"{r}")
+
     def simulator_step(self):
-        delta = self.delta / 180 * np.pi
-        #print(delta)
-        #self.current_state = self.simulator.step(delta)
+        left_force = self.l_thrust_input / 100 * 5.0
+        right_force = self.r_thrust_input / 100 * 5.0
+        tau = self.thruster.newton_to_tau(left_force, right_force)
+        self.add_line_to_info(f"tau: {tau}")
+        self.current_state = self.simulator.step(tau)
 
     def refresh_canvas(self):
-        heading = self.current_state[2][0] / np.pi * 180
-        self.canvas.update_ship_state(self.current_state)
-    """
+        #self.heading = self.current_state[2][0] / np.pi * 180
+        self.canvas.update_ship_state(
+            self.current_state[0][0],
+            self.current_state[1][0],
+            self.current_state[2][0],
+        )
+        self.update_uvr()
 
+    def clip_and_set_EOT(self):
+        if self.l_thrust_input > 100:
+            self.l_thrust_input = 100
+        elif self.l_thrust_input < -100:
+            self.l_thrust_input = -100
+        if self.r_thrust_input > 100:
+            self.r_thrust_input = 100
+        elif self.r_thrust_input < -100:
+            self.r_thrust_input = -100
+        self.left_EOT.setValue(self.l_thrust_input)
+        self.right_EOT.setValue(self.r_thrust_input)
+
+
+    def eventFilter(self, obj, event):
+        if event.type() == event.Type.KeyPress and not self.using_joystick and self.simulating:
+            key = event.key()
+            if key == QtCore.Qt.Key.Key_W:
+                self.l_thrust_input += 5
+                self.r_thrust_input += 5
+                self.clip_and_set_EOT()
+                return True  # 表示事件已处理
+            elif key == QtCore.Qt.Key.Key_S:
+                self.l_thrust_input -= 5
+                self.r_thrust_input -= 5
+                self.clip_and_set_EOT()
+                return True  # 表示事件已处理
+            elif key == QtCore.Qt.Key.Key_A:
+                self.l_thrust_input -= 5
+                self.r_thrust_input += 5
+                self.clip_and_set_EOT()
+                return True  # 表示事件已处理
+            elif key == QtCore.Qt.Key.Key_D:
+                self.l_thrust_input += 5
+                self.r_thrust_input -= 5
+                self.clip_and_set_EOT()
+                return True  # 表示事件已处理
+        return super().eventFilter(obj, event)
+
+# data from <Research on Parameter Identification Method of Four-Thrusters AUSV Dynamics Model>
+# 此参数会自激旋转,可能原因为非线性项缺失
+b = 0.5
+hydro_params = {
+    "d11": 6.0,
+    "d22": 7.1,
+    "d33": 0.8,
+    "m11": 13.0,
+    "m22": 23.3,
+    "m33": 1.3,
+}
 
 app = QtWidgets.QApplication(sys.argv)
 app.setStyle("Fusion")
 app.setPalette(darkPalette)
-mw = simulatorWindow()
+mw = simulatorWindow(hydro_params=hydro_params, b=b)
 mw.show()
 app.exec()

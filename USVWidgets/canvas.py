@@ -8,7 +8,19 @@ from collections import namedtuple
 from USVWidgets.palette_dark import darkPalette
 
 
-class KVLCCCanvas(QtWidgets.QLabel):
+kvlcc_30pix_poly = QtGui.QPolygon([
+        QtCore.QPoint(-3, -14), QtCore.QPoint(-3, 11),
+        QtCore.QPoint(0, 15), QtCore.QPoint(3, 11), QtCore.QPoint(3, -14),
+])
+
+usv_30pix_poly = QtGui.QPolygon([
+        QtCore.QPoint(-2.5, -5), QtCore.QPoint(-2.5, -15), QtCore.QPoint(-7.5, -15), QtCore.QPoint(-7.5, 12),
+        QtCore.QPoint(-5, 15), QtCore.QPoint(-2.5, 12), QtCore.QPoint(-2.5, 5),
+        QtCore.QPoint(2.5, 5), QtCore.QPoint(2.5, 12), QtCore.QPoint(5, 15), 
+        QtCore.QPoint(7.5, 12), QtCore.QPoint(7.5, -15), QtCore.QPoint(2.5, -15), QtCore.QPoint(2.5, -5),
+])
+
+class ShipCanvas(QtWidgets.QLabel):
     def __init__(
               self,
               *args,
@@ -18,14 +30,12 @@ class KVLCCCanvas(QtWidgets.QLabel):
               #ship_length = 7,
               #ship_height = 2,
               meter_to_pixel_scale = 10,
+              model=kvlcc_30pix_poly,
               **kwargs,
     ):
         super().__init__(*args, **kwargs)
         # default displaying with 2.9m length and 0.6m width
-        self.ship_poly = QtGui.QPolygon([
-            QtCore.QPoint(-3, -14), QtCore.QPoint(-3, 11),
-            QtCore.QPoint(0, 15), QtCore.QPoint(3, 11), QtCore.QPoint(3, -14),
-        ])
+        self.ship_poly = model
         self.x = pool_width/2
         self.y = pool_height/2
         self.pool_width = pool_width

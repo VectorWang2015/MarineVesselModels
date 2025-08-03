@@ -1,9 +1,9 @@
 import numpy as np
-from .Fossen import LinearFossen
+from .Fossen import Fossen
 from .stepper import time_invariant_simulator_runge_kutta
 
 
-class LinearFossenSimulator():
+class FossenSimulator():
     def __init__(
             self,
             hydro_params,
@@ -15,7 +15,7 @@ class LinearFossenSimulator():
         self.t = time_step
 
         self.step_fn = step_fn
-        self.model = LinearFossen(
+        self.model = Fossen(
             **hydro_params,
         )
 

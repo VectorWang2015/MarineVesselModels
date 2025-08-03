@@ -2,7 +2,7 @@ import numpy as np
 from typing import Tuple, Optional
 
 
-class LinearFossen():
+class Fossen():
     def __init__(
             self,
             d11,
