@@ -3,11 +3,12 @@ from .Fossen import Fossen
 from .stepper import time_invariant_simulator_runge_kutta
 
 
-class FossenSimulator():
+class VesselSimulator():
     def __init__(
             self,
             hydro_params,
             time_step: float,
+            model = Fossen,
             init_state: np.array = np.array([0,0,0,0,0,0]).reshape([6,1]),
             step_fn = time_invariant_simulator_runge_kutta,
     ):
@@ -15,7 +16,7 @@ class FossenSimulator():
         self.t = time_step
 
         self.step_fn = step_fn
-        self.model = Fossen(
+        self.model = model(
             **hydro_params,
         )
 

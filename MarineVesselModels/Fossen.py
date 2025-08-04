@@ -2,6 +2,20 @@ import numpy as np
 from typing import Tuple, Optional
 
 
+# data from <Research on Parameter Identification Method of Four-Thrusters AUSV Dynamics Model>
+# 此参数会自激旋转,可能原因为非线性项缺失
+sample_thrust = 5.0
+sample_b = 0.5
+sample_hydro_params = {
+    "d11": 6.0,
+    "d22": 7.1,
+    "d33": 0.8,
+    "m11": 13.0,
+    "m22": 23.3,
+    "m33": 1.3,
+}
+
+
 class Fossen():
     def __init__(
             self,
@@ -40,10 +54,6 @@ class Fossen():
 
         self.M = np.diag([self.m11, self.m22, self.m33])
         self.D = np.diag([d11, d22, d33])
-
-    @property
-    def state(self):
-        return np.vstack((self.x, self.v))
 
     def C(self, state):
         u = state[3][0]
