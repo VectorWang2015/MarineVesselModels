@@ -1,7 +1,8 @@
 import numpy as np
 
 
-sample_thrust = 50.0
+# data from <Modeling and Experimental Testing of an UnmannedSurface Vehicle with Rudderless Double Thrusters>
+sample_thrust = 100.0
 sample_b = 0.52
 sample_hydro_params = {
     "m11": 50.05,

@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 from USVWidgets.canvas import ShipCanvas, usv_30pix_poly
 from USVWidgets.control import EngineOrderTele
 from USVWidgets.palette_dark import darkPalette
+from USVWidgets.shipvsi import ShipVSI
 from xinput_support import get_control
 
 from MarineVesselModels.simulator import VesselSimulator
@@ -36,6 +37,7 @@ class simulatorWindow(QtWidgets.QMainWindow):
         self.infoLayout = QVBoxLayout()
         self.inputLayout = QVBoxLayout()
         self.eotLayout = QHBoxLayout()
+        self.vsiLayout = QHBoxLayout()
         self.buttonsLayout = QHBoxLayout()
         self.uvrLayout = QFormLayout()
 
@@ -45,6 +47,13 @@ class simulatorWindow(QtWidgets.QMainWindow):
         self.SuspendButton = QPushButton("Suspend")
         self.SuspendButton.setEnabled(False)
         self.Switch = QPushButton("Using EOT")
+
+        self.u_vsi = ShipVSI(face_svg="vsi_face_lim5.svg", v_lim=5)
+        self.u_vsi.setFixedSize(140, 140)
+        self.v_vsi = ShipVSI(face_svg="vsi_face_lim5.svg", v_lim=5)
+        self.v_vsi.setFixedSize(140, 140)
+        self.r_vsi = ShipVSI(face_svg="vsi_face_lim5.svg", v_lim=5)
+        self.r_vsi.setFixedSize(140, 140)
 
         self.InfoBox = QPlainTextEdit("Debug info:\n")
         self.InfoBox.setReadOnly(True)
@@ -72,7 +81,15 @@ class simulatorWindow(QtWidgets.QMainWindow):
         self.canvasLayout.addWidget(self.canvas)
         self.canvasLayout.addLayout(self.infoLayout)
 
+        self.vsiLayout.addWidget(QLabel("u"))
+        self.vsiLayout.addWidget(self.u_vsi)
+        self.vsiLayout.addWidget(QLabel("v"))
+        self.vsiLayout.addWidget(self.v_vsi)
+        self.vsiLayout.addWidget(QLabel("r"))
+        self.vsiLayout.addWidget(self.r_vsi)
+
         self.infoLayout.addWidget(self.InfoBox)
+        self.infoLayout.addLayout(self.vsiLayout)
         self.infoLayout.addLayout(self.uvrLayout)
         self.infoLayout.addStretch()
         self.infoLayout.addLayout(self.inputLayout)
@@ -224,12 +241,15 @@ class simulatorWindow(QtWidgets.QMainWindow):
                 self.add_line_to_info("Xbox controller undetected!")
 
     def update_uvr(self):
-        u = self.current_state[3][0],
-        v = self.current_state[4][0],
-        r = self.current_state[5][0],
+        u = self.current_state[3][0]
+        v = self.current_state[4][0]
+        r = self.current_state[5][0]
         self.LEu.setText(f"{u}")
         self.LEv.setText(f"{v}")
         self.LEr.setText(f"{r}")
+        self.u_vsi.setV(u)
+        self.v_vsi.setV(v)
+        self.r_vsi.setV(r)
 
     def simulator_step(self):
         left_force = self.l_thrust_input / 100 * self.max_thrust
@@ -239,7 +259,6 @@ class simulatorWindow(QtWidgets.QMainWindow):
         self.current_state = self.simulator.step(tau)
 
     def refresh_canvas(self):
-        #self.heading = self.current_state[2][0] / np.pi * 180
         self.canvas.update_ship_state(
             self.current_state[0][0],
             self.current_state[1][0],
