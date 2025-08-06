@@ -15,8 +15,7 @@ from xinput_support import get_control
 
 from MarineVesselModels.simulator import VesselSimulator
 from MarineVesselModels.thrusters import NaiveDoubleThruster
-#from MarineVesselModels.Fossen import sample_b, sample_hydro_params, sample_thrust, Fossen
-from MarineVesselModels.mmg import sample_b, sample_hydro_params, sample_thrust, MMG_HXH
+from MarineVesselModels.Fossen import sample_b_2, sample_hydro_params_2, sample_thrust_2, Fossen
 
 pool_width = 1600
 pool_height = 900
@@ -308,7 +307,6 @@ class simulatorWindow(QtWidgets.QMainWindow):
 app = QtWidgets.QApplication(sys.argv)
 app.setStyle("Fusion")
 app.setPalette(darkPalette)
-#mw = simulatorWindow(model=Fossen, hydro_params=sample_hydro_params, b=sample_b, sample_thrust=sample_thrust)
-mw = simulatorWindow(model=MMG_HXH, hydro_params=sample_hydro_params, b=sample_b, sample_thrust=sample_thrust)
+mw = simulatorWindow(model=Fossen, hydro_params=sample_hydro_params_2, b=sample_b_2, sample_thrust=sample_thrust_2)
 mw.show()
 app.exec()

@@ -15,13 +15,26 @@ sample_hydro_params = {
     "m33": 1.3,
 }
 
+# data from <Modeling and Experimental Testing of an UnmannedSurface Vehicle with Rudderless Double Thrusters>
+sample_thrust_2 = 100.0
+sample_b_2 = 0.52
+sample_hydro_params_2 = {
+    "m11": 50.05,
+    "m22": 84.36,
+    "m33": 17.21,
+    "X_u": 151.57,
+    "Y_v": 132.5,
+    "N_r": 34.56,
+}
+sample_thrust_params_2 = {
+    "c": -1.60e-4,
+    "d": 5.04e-3,
+}
+
 
 class Fossen():
     def __init__(
             self,
-            d11,
-            d22,
-            d33,
             m: Optional[float]=None,
             X_dotu: Optional[float]=None,
             Y_dotv: Optional[float]=None,
@@ -30,6 +43,12 @@ class Fossen():
             m11: Optional[float]=None,
             m22: Optional[float]=None,
             m33: Optional[float]=None,
+            d11: Optional[float]=None,
+            d22: Optional[float]=None,
+            d33: Optional[float]=None,
+            X_u: Optional[float]=None,
+            Y_v: Optional[float]=None,
+            N_r: Optional[float]=None,
     ):
         r"""
         M \dot{v} + Cv + Dv = \tau
@@ -53,7 +72,10 @@ class Fossen():
             self.m33 = I - N_dotr
 
         self.M = np.diag([self.m11, self.m22, self.m33])
-        self.D = np.diag([d11, d22, d33])
+        if d11 is not None:
+            self.D = np.diag([d11, d22, d33])
+        else:
+            self.D = np.diag([X_u, Y_v, N_r])
 
     def C(self, state):
         u = state[3][0]
