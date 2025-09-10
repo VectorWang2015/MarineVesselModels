@@ -85,7 +85,6 @@ base_delta_N = 20.0
 zigzag_degrees = 10.0 / 180 * np.pi
 
 current_state = np.array([0, 0, init_psi, 0.659761, 0, 0]).reshape([6, 1])
-states = current_state.copy()
 
 simulator = VesselSimulator(
     sample_hydro_params_2,
@@ -100,31 +99,49 @@ tgt_psi = init_psi + zigzag_degrees
 left_thr = base_N + base_delta_N
 right_thr = base_N - base_delta_N
 tau = thruster.newton_to_tau(left_thr, right_thr)
+states = None
+
 while current_state[2][0] < tgt_psi:
+    current_state_with_tau = np.vstack((current_state, tau))
+    if states is not None:
+        states = np.hstack((states, current_state_with_tau))
+    else:
+        states = current_state_with_tau.copy()
+
     current_state = simulator.step(tau)
-    states = np.hstack((states, current_state))
+
 # turn left
 tgt_psi = init_psi - zigzag_degrees
 left_thr = base_N - base_delta_N
 right_thr = base_N + base_delta_N
 tau = thruster.newton_to_tau(left_thr, right_thr)
+
 while current_state[2][0] > tgt_psi:
+    current_state_with_tau = np.vstack((current_state, tau))
+    states = np.hstack((states, current_state_with_tau))
+
     current_state = simulator.step(tau)
-    states = np.hstack((states, current_state))
+
 # turn right
 tgt_psi = init_psi + zigzag_degrees
 left_thr = base_N + base_delta_N
 right_thr = base_N - base_delta_N
 tau = thruster.newton_to_tau(left_thr, right_thr)
+
 while current_state[2][0] < tgt_psi:
+    current_state_with_tau = np.vstack((current_state, tau))
+    states = np.hstack((states, current_state_with_tau))
+
     current_state = simulator.step(tau)
-    states = np.hstack((states, current_state))
+
+current_state_with_tau = np.vstack((current_state, np.zeros((3, 1))))
 
 # fig, ax = plt.subplots()
 # ax.set_aspect("equal")
 # ax.plot(states[1], states[0])
 # plt.show()
 np.save("Fossen_zigzag_50_20_10.npy", states)
+print(states.shape)
 
 
 # zigzag 20
@@ -139,7 +156,6 @@ base_delta_N = 20.0
 zigzag_degrees = 20.0 / 180 * np.pi
 
 current_state = np.array([0, 0, init_psi, 0.659761, 0, 0]).reshape([6, 1])
-states = current_state.copy()
 
 simulator = VesselSimulator(
     sample_hydro_params_2,
@@ -154,25 +170,42 @@ tgt_psi = init_psi + zigzag_degrees
 left_thr = base_N + base_delta_N
 right_thr = base_N - base_delta_N
 tau = thruster.newton_to_tau(left_thr, right_thr)
+states = None
+
 while current_state[2][0] < tgt_psi:
+    current_state_with_tau = np.vstack((current_state, tau))
+    if states is not None:
+        states = np.hstack((states, current_state_with_tau))
+    else:
+        states = current_state_with_tau.copy()
+
     current_state = simulator.step(tau)
-    states = np.hstack((states, current_state))
+
 # turn left
 tgt_psi = init_psi - zigzag_degrees
 left_thr = base_N - base_delta_N
 right_thr = base_N + base_delta_N
 tau = thruster.newton_to_tau(left_thr, right_thr)
+
 while current_state[2][0] > tgt_psi:
+    current_state_with_tau = np.vstack((current_state, tau))
+    states = np.hstack((states, current_state_with_tau))
+
     current_state = simulator.step(tau)
-    states = np.hstack((states, current_state))
+
 # turn right
 tgt_psi = init_psi + zigzag_degrees
 left_thr = base_N + base_delta_N
 right_thr = base_N - base_delta_N
 tau = thruster.newton_to_tau(left_thr, right_thr)
+
 while current_state[2][0] < tgt_psi:
+    current_state_with_tau = np.vstack((current_state, tau))
+    states = np.hstack((states, current_state_with_tau))
+
     current_state = simulator.step(tau)
-    states = np.hstack((states, current_state))
+
+current_state_with_tau = np.vstack((current_state, np.zeros((3, 1))))
 
 fig, ax = plt.subplots()
 ax.set_aspect("equal")
@@ -191,3 +224,4 @@ axs[3].legend()
 plt.show()
 
 np.save("Fossen_zigzag_50_20_20.npy", states)
+print(states.shape)
