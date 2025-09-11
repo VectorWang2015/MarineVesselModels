@@ -76,8 +76,6 @@ plt.show()
 # zigzag 10
 # converged u under base thrust 50N: 0.659761
 time_step = 0.01
-total_time = 20
-total_steps = int(total_time / time_step)
 
 init_psi = 0
 base_N = 50.0
@@ -147,8 +145,6 @@ print(states.shape)
 # zigzag 20
 # converged u under base thrust 50N: 0.659761
 time_step = 0.01
-total_time = 20
-total_steps = int(total_time / time_step)
 
 init_psi = 0
 base_N = 50.0
@@ -215,7 +211,7 @@ plt.show()
 fig, axs = plt.subplots(4, 1)
 axs[0].plot(np.arange(states.shape[1])*time_step, states[2]/np.pi*180, label="$\psi$")
 axs[0].legend()
-axs[1].plot(np.arange(states.shape[1])*time_step, states[5], label="$\omega$")
+axs[1].plot(np.arange(states.shape[1])*time_step, states[5], label="$r$")
 axs[1].legend()
 axs[2].plot(np.arange(states.shape[1])*time_step, states[3], label="$u$")
 axs[2].legend()
