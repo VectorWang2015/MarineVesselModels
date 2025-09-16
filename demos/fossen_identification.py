@@ -2,25 +2,26 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from MarineVesselModels.simulator import VesselSimulator
-from MarineVesselModels.KT import FirstOrderResponse, sample_hydro_params, NoisyFirstOrderResponse
-from identification.least_square_methods import LeastSquareFirstOrderNonLinearResponse, RecursiveLeastSquareFirstOrderNonLinearResponse
-from demos.kt_zigzag import kt_zigzag
+from MarineVesselModels.Fossen import sample_hydro_params_2, sample_b_2, sample_thrust_2, Fossen
+from MarineVesselModels.thrusters import NaiveDoubleThruster
+from identification.least_square_methods import LeastSquareFossen
+from demos.fossen_zigzag import fossen_zigzag
 
 
 if __name__ == "__main__":
-    train_data = np.load("./demos/KT_noisy_zigzag_25_5_0.01.npy")
+    train_data = np.load("./demos/Fossen_zigzag_20_50_20_0.01.npy")
     time_step = 0.01
     # train_data before this index, will be treated as init data
     # after this index, will be treated update data, which will be used for recursive update
     update_index = 200
     
-    identifier = RecursiveLeastSquareFirstOrderNonLinearResponse(time_step=time_step)
-    result = identifier.identificate(train_data=train_data[:, :update_index])
-    K = result["K"]
-    T = result["T"]
-    alpha = result["alpha"]
-    print(K, T, alpha)
+    identifier = LeastSquareFossen(time_step=time_step)
+    #result = identifier.identificate(train_data=train_data[:, :update_index])
+    result = identifier.identificate(train_data=train_data)
+    print(f"Real params: \n{sample_hydro_params_2}")
+    print(f"Identified result: \n{result}")
     
+    """
     thetas = []
     
     result = identifier.identificate(train_data=train_data[:, update_index:], thetas=thetas)
@@ -33,6 +34,7 @@ if __name__ == "__main__":
     # thetas is now a 3xn array
     # a1, a2, b1
     thetas = np.hstack(thetas)
+    """
     
     # plot src
     fig, ax = plt.subplots()
@@ -41,19 +43,30 @@ if __name__ == "__main__":
     
     # plot prediction
     # init simulation
-    u = sample_hydro_params["u"]
-    kt_simul = VesselSimulator(
-        hydro_params={"K":K, "T":T, "alpha":alpha, "u":u},
+    time_step = 0.01
+        
+    init_psi = 0
+    base_N = 50.0
+    base_delta_N = 20.0
+    zigzag_degrees = 20.0
+        
+    current_state = np.array([0, 0, init_psi, 0.659761, 0, 0]).reshape([6, 1])
+        
+    simulator = VesselSimulator(
+        sample_hydro_params_2,
         time_step=time_step,
-        model=FirstOrderResponse,
-        init_state=np.array([0, 0, 0, u, 0, 0]).reshape([6, 1]),
+        model=Fossen,
+        init_state=current_state,
     )
-    
-    states = kt_zigzag(
-        simulator=kt_simul,
-        zigzag_degrees=25,
-        sample_delta=5,
-        sample_u=u,
+    thruster = NaiveDoubleThruster(b=sample_b_2)
+        
+    states = fossen_zigzag(
+        simulator=simulator,
+        thruster=thruster,
+        current_state=current_state,
+        zigzag_degrees=zigzag_degrees,
+        base_N=base_N,
+        base_delta_N=base_delta_N,
     )
     
     ax.plot(states[1, :], states[0, :], label="Prediction")
@@ -61,6 +74,7 @@ if __name__ == "__main__":
     
     plt.show()
     
+    """
     # plot convergence
     fig, axs = plt.subplots(3, 1)
     
@@ -73,3 +87,4 @@ if __name__ == "__main__":
     plot_convergence(axs[1], thetas[1], "a2")
     plot_convergence(axs[2], thetas[2], "b1")
     plt.show()
+    """

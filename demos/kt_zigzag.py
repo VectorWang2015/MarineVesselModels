@@ -7,14 +7,14 @@ from MarineVesselModels.KT import FirstOrderResponse, sample_hydro_params, Noisy
 
 def kt_zigzag(
         simulator,
+        current_state,
         zigzag_degrees: float,
         sample_delta: float,
         sample_u: float,
 ):
     init_psi = 0
     zigzag_psi = zigzag_degrees / 180 * np.pi
-    
-    current_state = np.array([0, 0, init_psi, sample_u, 0, 0]).reshape([6, 1])
+    current_state = current_state.copy()
     
     # turn right
     tgt_psi = init_psi + zigzag_psi
@@ -93,6 +93,7 @@ if __name__ == "__main__":
     
     states = kt_zigzag(
         simulator=simulator,
+        current_state=current_state,
         zigzag_degrees=zigzag_degrees,
         sample_delta=sample_delta,
         sample_u=sample_u,
@@ -120,7 +121,6 @@ if __name__ == "__main__":
     print(states[:, -1])
     """
     
-    
     # zigzag with white noise 25/5
     time_step = 0.01
     
@@ -140,6 +140,7 @@ if __name__ == "__main__":
     
     states = kt_zigzag(
         simulator=simulator,
+        current_state=current_state,
         zigzag_degrees=zigzag_degrees,
         sample_delta=sample_delta,
         sample_u=sample_u,
