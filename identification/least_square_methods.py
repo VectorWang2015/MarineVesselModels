@@ -216,7 +216,6 @@ class LeastSquareFossen():
                 self.H = np.vstack((self.H, H_i))
             
         self.P = np.linalg.inv(self.H.T @ self.H)
-        breakpoint()
         self.theta = self.P @ self.H.T @ self.y
 
         return self._theta_to_params(theta=self.theta)
@@ -258,7 +257,7 @@ class RecursiveLeastSquareFossen(
         # update K
         self.K = self.P @ H_k.T @ np.linalg.inv(np.identity(1) + H_k @ self.P @ H_k.T)
         # update P
-        self.P = (np.identity(3) - self.K @ H_k) @ self.P
+        self.P = (np.identity(6) - self.K @ H_k) @ self.P
         # update theta
         self.theta = self.theta + self.K @ (y_k - H_k@self.theta)
 
@@ -268,17 +267,35 @@ class RecursiveLeastSquareFossen(
         """
         # clear and reinit H, y
         self.y = None   # nx1
-        self.H = None   # nx3
+        self.H = None   # nx6
 
+        us = train_data[3]
+        vs = train_data[4]
+        rs = train_data[5]
+
+        dot_us = np.gradient(us, self.time_step)
+        dot_vs = np.gradient(vs, self.time_step)
+        dot_rs = np.gradient(rs, self.time_step)
+        
         for i in range(train_data.shape[1] - 1):
         #for i in range(5):
-            r = train_data[5][i]
-            r_3 = r*r*r
-            delta = train_data[6][i]
-            r_next = train_data[5][i+1]
-        
-            y_i = np.array([r_next]).reshape([1, 1])
-            H_i = np.array([r, r_3, delta]).reshape([1, 3])
+            u = us[i]
+            v = vs[i]
+            r = rs[i]
+            dot_u = dot_us[i]
+            dot_v = dot_vs[i]
+            dot_r = dot_rs[i]
+
+            # construct tau & H
+            y_i = train_data[6:,i].reshape([3, 1])
+            H_i = np.array(
+                [
+                    [dot_u, -v*r, 0, u, 0, 0],
+                    [u*r, dot_v, 0, 0, v, 0],
+                    [u*v, -u*v, dot_r, 0, 0, r],
+
+                ]
+            )
         
             if self.y is None:
                 self.y = y_i
@@ -304,4 +321,3 @@ class RecursiveLeastSquareFossen(
 
         # recursive update
         return self.recursive_identificate(train_data, thetas)
-

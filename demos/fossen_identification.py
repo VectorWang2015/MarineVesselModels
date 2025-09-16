@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 from MarineVesselModels.simulator import VesselSimulator
 from MarineVesselModels.Fossen import sample_hydro_params_2, sample_b_2, sample_thrust_2, Fossen
 from MarineVesselModels.thrusters import NaiveDoubleThruster
-from identification.least_square_methods import LeastSquareFossen
+from identification.least_square_methods import LeastSquareFossen, RecursiveLeastSquareFossen
 from demos.fossen_zigzag import fossen_zigzag
 
 
@@ -13,28 +13,21 @@ if __name__ == "__main__":
     time_step = 0.01
     # train_data before this index, will be treated as init data
     # after this index, will be treated update data, which will be used for recursive update
-    update_index = 200
+    update_index = 100
     
-    identifier = LeastSquareFossen(time_step=time_step)
+    identifier = RecursiveLeastSquareFossen(time_step=time_step)
     #result = identifier.identificate(train_data=train_data[:, :update_index])
-    result = identifier.identificate(train_data=train_data)
+    result = identifier.identificate(train_data=train_data[:, :update_index])
     print(f"Real params: \n{sample_hydro_params_2}")
     print(f"Identified result: \n{result}")
     
-    """
     thetas = []
     
     result = identifier.identificate(train_data=train_data[:, update_index:], thetas=thetas)
-    K = result["K"]
-    T = result["T"]
-    alpha = result["alpha"]
+    print(f"Identified result: \n{result}")
     
-    print(K, T, alpha)
-    
-    # thetas is now a 3xn array
-    # a1, a2, b1
+    # thetas is now a 6xn array
     thetas = np.hstack(thetas)
-    """
     
     # plot src
     fig, ax = plt.subplots()
@@ -74,17 +67,18 @@ if __name__ == "__main__":
     
     plt.show()
     
-    """
     # plot convergence
-    fig, axs = plt.subplots(3, 1)
+    fig, axs = plt.subplots(3, 2)
     
     def plot_convergence(ax, data, tag):
         ax.plot(np.arange(len(data)), data, label=tag)
         ax.set_xlabel("Iteration")
         ax.legend()
     
-    plot_convergence(axs[0], thetas[0], "a1")
-    plot_convergence(axs[1], thetas[1], "a2")
-    plot_convergence(axs[2], thetas[2], "b1")
+    plot_convergence(axs[0][0], thetas[0], "m11")
+    plot_convergence(axs[1][0], thetas[1], "m22")
+    plot_convergence(axs[2][0], thetas[2], "m33")
+    plot_convergence(axs[0][1], thetas[3], "d11")
+    plot_convergence(axs[1][1], thetas[4], "d22")
+    plot_convergence(axs[2][1], thetas[5], "d33")
     plt.show()
-    """
