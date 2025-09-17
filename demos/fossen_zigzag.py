@@ -58,7 +58,7 @@ def fossen_zigzag(
     
         current_state = simulator.step(tau)
     
-    current_state_with_tau = np.vstack((current_state, np.zeros((3, 1))))
+    current_state_with_tau = np.vstack((current_state, tau))
     states = np.hstack((states, current_state_with_tau))
 
     return states
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     # ax.set_aspect("equal")
     # ax.plot(states[1], states[0])
     # plt.show()
-    np.save("Fossen_zigzag_50_20_10.npy", states)
+    np.save("Fossen_zigzag_10_50_20_0.01.npy", states)
     print(states.shape)
     
     
@@ -211,5 +211,5 @@ if __name__ == "__main__":
     axs[3].legend()
     plt.show()
     
-    np.save("Fossen_zigzag_50_20_20.npy", states)
+    np.save("Fossen_zigzag_20_50_20_0.01.npy", states)
     print(states.shape)

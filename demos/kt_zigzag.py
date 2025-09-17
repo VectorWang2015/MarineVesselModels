@@ -50,7 +50,7 @@ def kt_zigzag(
     
         current_state = simulator.step(tau)
     
-    current_state_with_tau = np.vstack((current_state, np.zeros((1, 1))))
+    current_state_with_tau = np.vstack((current_state, tau))
     states = np.hstack((states, current_state_with_tau))
 
     return states
@@ -58,7 +58,6 @@ def kt_zigzag(
 
 if __name__ == "__main__":
     # zigzag 25/5
-    """
     time_step = 0.01
     
     init_psi = 0
@@ -99,7 +98,7 @@ if __name__ == "__main__":
         sample_u=sample_u,
     )
     
-    np.save("KT_zigzag_25_5.npy", states)
+    np.save("KT_zigzag_25_5_0.01.npy", states)
     
     fig, ax = plt.subplots()
     ax.set_aspect("equal")
@@ -119,7 +118,6 @@ if __name__ == "__main__":
     
     print(states.shape)
     print(states[:, -1])
-    """
     
     # zigzag with white noise 25/5
     time_step = 0.01
@@ -146,7 +144,7 @@ if __name__ == "__main__":
         sample_u=sample_u,
     )
     
-    np.save("KT_noisy_zigzag_25_5.npy", states)
+    np.save("KT_noisy_zigzag_25_5_0.01.npy", states)
     
     fig, ax = plt.subplots()
     ax.set_aspect("equal")

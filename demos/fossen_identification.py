@@ -10,6 +10,8 @@ from demos.fossen_zigzag import fossen_zigzag
 
 if __name__ == "__main__":
     train_data = np.load("./demos/Fossen_zigzag_20_50_20_0.01.npy")
+    print(f"Sample size: {train_data.shape}")
+
     time_step = 0.01
     # train_data before this index, will be treated as init data
     # after this index, will be treated update data, which will be used for recursive update
