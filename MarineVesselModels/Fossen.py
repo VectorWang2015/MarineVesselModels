@@ -26,6 +26,7 @@ sample_hydro_params_2 = {
     "Y_v": 132.5,
     "N_r": 34.56,
 }
+# !!!data suspicous
 sample_thrust_params_2 = {
     "c": -1.60e-4,
     "d": 5.04e-3,
