@@ -179,10 +179,28 @@ class LeastSquareFossen():
         }
 
     def smooth_fn(self, signals):
+        """
+        Filter ignored here, cuz this class is inherited by RLS
+        """
         return signals
 
     def dot_fn(self, signals):
+        """
+        Filter ignored here, cuz this class is inherited by RLS
+        """
         return np.gradient(signals, self.time_step)
+
+    def norm_fn(self, H):
+        """
+        Normalization ignored here, cuz this class is inherited by RLS
+        """
+        return H
+
+    def denorm_fn(self, theta):
+        """
+        Normalization ignored here, cuz this class is inherited by RLS
+        """
+        return theta
 
     def identificate(
             self,
@@ -227,9 +245,11 @@ class LeastSquareFossen():
             else:
                 self.y = np.vstack((self.y, y_i))
                 self.H = np.vstack((self.H, H_i))
-            
+
+        self.H = self.norm_fn(self.H)
         self.P = np.linalg.inv(self.H.T @ self.H)
         self.theta = self.P @ self.H.T @ self.y
+        self.theta = self.denorm_fn(self.theta)
 
         return self._theta_to_params(theta=self.theta)
 
@@ -252,6 +272,16 @@ class LeastSquareFossenSG(LeastSquareFossen):
 
     def dot_fn(self, signals):
         return savgol_filter(signals, window_length=self.SG_window, polyorder=3, deriv=1, delta=self.time_step)
+
+    def norm_fn(self, H):
+        self.scale = np.linalg.norm(H, axis=0)
+        print(f"Normalization imposed, scale: {self.scale}")
+        return H / self.scale
+
+    def denorm_fn(self, theta):
+        assert hasattr(self, "scale")
+        print(f"Denormalization imposed, scale: {self.scale}")
+        return theta / self.scale
 
 
 class RecursiveLeastSquareFossen(
