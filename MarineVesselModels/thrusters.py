@@ -55,9 +55,11 @@ class NpsDoubleThruster(NaiveDoubleThruster):
             l_nps,
             r_nps,
             u=0,
-            v=0,
+            #v=0,
     ):
-        v = np.sqrt(u**2 + v**2)
+        # v is small, V = u is a better approximation
+        #v = np.sqrt(u**2 + v**2)
+        v = u
         l_newton = self.l_thrust.n_to_newton(n=l_nps, v=v)
         r_newton = self.r_thrust.n_to_newton(n=r_nps, v=v)
 

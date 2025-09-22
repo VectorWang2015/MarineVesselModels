@@ -27,7 +27,7 @@ def fossen_nps_zigzag(
     while current_state[2][0] < tgt_psi:
         u = current_state[3][0]
         v = current_state[4][0]
-        tau = thruster.n_to_tau(left_thr, right_thr, u, v)
+        tau = thruster.n_to_tau(left_thr, right_thr, u)
 
         nps = np.array([left_thr, right_thr]).reshape([2, 1])
         current_state_with_nps = np.vstack((current_state, nps))
@@ -45,7 +45,7 @@ def fossen_nps_zigzag(
     while current_state[2][0] > tgt_psi:
         u = current_state[3][0]
         v = current_state[4][0]
-        tau = thruster.n_to_tau(left_thr, right_thr, u, v)
+        tau = thruster.n_to_tau(left_thr, right_thr, u)
 
         nps = np.array([left_thr, right_thr]).reshape([2, 1])
         current_state_with_nps = np.vstack((current_state, nps))
@@ -56,12 +56,11 @@ def fossen_nps_zigzag(
     # turn right
     tgt_psi = init_psi + zigzag_psi
     left_thr, right_thr = right_thr, left_thr
-    tau = thruster.newton_to_tau(left_thr, right_thr)
     
     while current_state[2][0] < tgt_psi:
         u = current_state[3][0]
         v = current_state[4][0]
-        tau = thruster.n_to_tau(left_thr, right_thr, u, v)
+        tau = thruster.n_to_tau(left_thr, right_thr, u)
 
         nps = np.array([left_thr, right_thr]).reshape([2, 1])
         current_state_with_nps = np.vstack((current_state, nps))

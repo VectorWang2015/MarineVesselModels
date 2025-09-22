@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Dict, Optional, List
+from scipy.signal import savgol_filter
 
 
 class LeastSquareFirstOrderNonLinearResponse():
@@ -177,19 +178,28 @@ class LeastSquareFossen():
             "d11": d11, "d22": d22, "d33": d33,
         }
 
+    def smooth_fn(self, signals):
+        return signals
+
+    def dot_fn(self, signals):
+        return np.gradient(signals, self.time_step)
+
     def identificate(
             self,
             train_data: np.array, # train data should be 9*n array
     ) -> Dict[str, float]:
         assert train_data.shape[0] == 9
 
-        us = train_data[3]
-        vs = train_data[4]
-        rs = train_data[5]
+        us = self.smooth_fn(train_data[3])
+        vs = self.smooth_fn(train_data[4])
+        rs = self.smooth_fn(train_data[5])
+        # us = train_data[3]
+        # vs = train_data[4]
+        # rs = train_data[5]
 
-        dot_us = np.gradient(us, self.time_step)
-        dot_vs = np.gradient(vs, self.time_step)
-        dot_rs = np.gradient(rs, self.time_step)
+        dot_us = self.dot_fn(us)
+        dot_vs = self.dot_fn(vs)
+        dot_rs = self.dot_fn(rs)
         
         for i in range(train_data.shape[1] - 1):
         #for i in range(5):
@@ -224,10 +234,31 @@ class LeastSquareFossen():
         return self._theta_to_params(theta=self.theta)
 
 
+class LeastSquareFossenSG(LeastSquareFossen):
+    def __init__(
+            self,
+            time_step: float,
+            SG_window: int = 11,
+    ):
+        """
+        Savitzky–Golay Filtered LS Method for Fossen models
+        recommend SG window size 11~21 for dt=0.1, 51~101 for dt=0.01
+        """
+        super().__init__(time_step)
+        self.SG_window = SG_window
+
+    def smooth_fn(self, signals):
+        return savgol_filter(signals, window_length=self.SG_window, polyorder=3)
+
+    def dot_fn(self, signals):
+        return savgol_filter(signals, window_length=self.SG_window, polyorder=3, deriv=1, delta=self.time_step)
+
+
 class RecursiveLeastSquareFossen(
     LeastSquareFossen
 ):
     r"""
+    !!! need to implement filter to denoise and better fit dot u
         y = tau
 
         \theta = \begin{bmatrix}
@@ -408,8 +439,10 @@ class AlternatingLeastSquareFossen():
 
         for i in range(train_data.shape[1] - 1):
             u = us[i]
-            v = vs[i]
-            V = np.sqrt(u**2+v**2)
+            #v = vs[i]
+            #V = np.sqrt(u**2+v**2)
+            # v is small, V = u is a better approximation
+            V = u
 
             n_l = n_ls[i]
             n_r = n_rs[i]
@@ -449,7 +482,9 @@ class AlternatingLeastSquareFossen():
             dot_u = dot_us[i]
             dot_v = dot_vs[i]
             dot_r = dot_rs[i]
-            V = np.sqrt(u**2+v**2)
+            # v is small, V = u is a better approximation
+            #V = np.sqrt(u**2+v**2)
+            V = u
 
             # construct tau & H
             H_i = np.array(
@@ -564,7 +599,9 @@ class AlternatingLeastSquareFossen():
             n_l = n_ls[i]
             n_r = n_rs[i]
             
-            V = np.sqrt(u**2+v**2)
+            # v is small, V = u is a better approximation
+            #V = np.sqrt(u**2+v**2)
+            V = u
 
             H_11 = V * (n_l+n_r)
             H_12 = abs(n_l)*n_l + abs(n_r)*n_r
