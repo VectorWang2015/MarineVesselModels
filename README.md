@@ -22,6 +22,14 @@ data: 8xn; [x, y, psi, u, v, r, left_nps, right_nps]
 
 > KT_zigzag_xx_yy_tt.npy
 
-First order non-linear response model, zigzag case with target psi xx degrees; turning rudder angle delta yy degrees; time step tt s;  
+First order non-linear response model, zigzag case with target psi xx degrees; turning rudder angle delta yy degrees; time step tt s.  
 
 data: 7xn; [x, y, psi, u, v, r, delta]  
+
+> Fossen_PRBS_tt_xx.npy
+> partial_PRBS_tt_xx.npy
+
+Fossen model, using PRBS control sequence for xx rounds, time step tt;  
+Partial file for dot(state) data storage, which are exported from simulator directly.  
+
+data: 9xn; [x, y, psi, u, v, r, tau1, tau2, tau3]  
