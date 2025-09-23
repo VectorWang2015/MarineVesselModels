@@ -20,6 +20,7 @@ def fossen_zigzag(
 
     F_ls = []
     F_rs = []
+    taus = []
 
     # turn right
     tgt_psi = init_psi + zigzag_psi
@@ -30,6 +31,7 @@ def fossen_zigzag(
     while current_state[2][0] < tgt_psi:
         F_ls.append(left_thr)
         F_rs.append(right_thr)
+        taus.append(tau)
         current_state = simulator.step(tau)
     
     # turn left
@@ -41,9 +43,10 @@ def fossen_zigzag(
     while current_state[2][0] > tgt_psi:
         F_ls.append(left_thr)
         F_rs.append(right_thr)
+        taus.append(tau)
         current_state = simulator.step(tau)
     
-    return F_ls, F_rs
+    return F_ls, F_rs, np.hstack(taus)
 
 if __name__ == "__main__":
     dt = 0.1
@@ -62,7 +65,7 @@ if __name__ == "__main__":
     )
     thruster = NaiveDoubleThruster(b=sample_b_2)
     
-    F_ls, F_rs = fossen_zigzag(
+    F_ls, F_rs, taus = fossen_zigzag(
         simulator=simulator,
         thruster=thruster,
         current_state=current_state,
@@ -71,18 +74,29 @@ if __name__ == "__main__":
         base_delta_N=base_delta_N,
     )
 
+    tau1 = list(taus[0])
+    tau3 = list(taus[2])
     t, n_L, n_R, n_sum, n_delta = generate_dualthruster_prbs(1200, dt)
 
-    F_ls = F_ls*300
-    print(len(n_L))
-    print(len(F_ls))
+    fig, axs = plt.subplots(2, 2)
+    tau1 = tau1*300
+    tau3 = tau3*300
 
-    plt.plot(t[:len(F_ls)], n_L[:len(F_ls)])
-    plt.plot(t[:len(F_ls)], F_ls)
-    plt.show()
+    axs[0][0].plot(t[:len(tau1)], n_sum[:len(tau1)])
+    axs[0][0].plot(t[:len(tau1)], tau1)
+    axs[0][0].set_ylabel("Fx")
 
-    n_L = n_L[:len(F_ls)]
-    fig, ax = plt.subplots()
-    plot_PSD(ax, n_L, 1/dt)
-    plot_PSD(ax, F_ls, 1/dt)
+    axs[0][1].plot(t[:len(tau3)], n_delta[:len(tau3)])
+    axs[0][1].plot(t[:len(tau3)], tau3)
+    axs[0][1].set_ylabel("Nr")
+
+
+    n_sum = n_sum[:len(tau1)]
+    n_delta = n_delta[:len(tau1)]
+
+    plot_PSD(axs[1][0], n_sum, 1/dt)
+    plot_PSD(axs[1][0], tau1, 1/dt)
+
+    plot_PSD(axs[1][1], n_delta, 1/dt)
+    plot_PSD(axs[1][1], tau3, 1/dt)
     plt.show()
