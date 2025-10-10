@@ -69,8 +69,8 @@ if __name__ == "__main__":
         if t % control_every == 0:
             # calculate new tau
             control_signal = diff_controller.control(error_delta=psi_err, r=r)
-            control_signal = max_diff_N if control_signal > max_diff_N else control_signal
-            control_signal = -max_diff_N if control_signal < -max_diff_N else control_signal
+            control_signal = max_diff_N/2 if control_signal > max_diff_N/2 else control_signal
+            control_signal = -max_diff_N/2 if control_signal < -max_diff_N/2 else control_signal
 
             left = base_N + control_signal
             right = base_N - control_signal
