@@ -7,6 +7,7 @@ from MarineVesselModels.Fossen import sample_b_2, sample_hydro_params_2, sample_
 from MarineVesselModels.noises import GaussMarkovNoiseGenerator
 
 from control.pid import PID
+from control.lqr import HeadingLQR
 from control.los import LOSGuider
 
 
@@ -52,13 +53,24 @@ if __name__ == "__main__":
         tau_noise_gen=tau_noise_gen,
     )
     thruster = NaiveDoubleThruster(b=sample_b_2)
-    diff_controller = PID(
-        kp=50,
-        ki=5,
-        kd=25,
-        buffer_size=10,
-        min_saturation=-max_diff_N/2,
-        max_saturation=max_diff_N/2,
+
+    # diff_controller = PID(
+    #     kp=50,
+    #     ki=5,
+    #     kd=25,
+    #     buffer_size=10,
+    #     min_saturation=-max_diff_N/2,
+    #     max_saturation=max_diff_N/2,
+    # )
+
+    Q = np.array([[15, 0], [0, 1]])
+    R = np.array([[0.03]])
+    diff_controller = HeadingLQR(
+        m33=sample_hydro_params_2["m33"],
+        d33=sample_hydro_params_2["N_r"],
+        b=sample_b_2,
+        Q=Q,
+        R=R,
     )
     guider = LOSGuider(waypoints=waypoints, reached_threshold=2)
 
@@ -86,7 +98,11 @@ if __name__ == "__main__":
         if t % control_every == 0:
             is_ended, psi_err = guider.step((current_x, current_y), current_psi)
             # calculate new tau
-            control_signal = diff_controller.control(error=psi_err)
+            #control_signal = diff_controller.control(error=psi_err)
+            control_signal = diff_controller.control(error_delta=psi_err, r=current_r)
+            # truncate
+            control_signal = max_diff_N/2 if control_signal > max_diff_N/2 else control_signal
+            control_signal = -max_diff_N/2 if control_signal < -max_diff_N/2 else control_signal
 
             left = base_N + control_signal
             right = base_N - control_signal
