@@ -22,11 +22,13 @@ class LOSGuider:
             self,
             waypoints: Iterable[Tuple[float, float]],
             reached_threshold: float,
+            output_err_flag: bool = True,
     ):
         """
         """
         self.reference_path = waypoints[:]
         self.reached_threshold = reached_threshold
+        self.output_err_flag = output_err_flag
 
     def calc_desired_direction(
             self,
@@ -66,17 +68,23 @@ class LOSGuider:
             del(self.reference_path[0])
             if len(self.reference_path) == 0:
                 # if all targets reached, return True
-                return (True, 0)
+                if self.output_err_flag:
+                    return (True, 0)
+                else:
+                    return (True, None)
             else:
                 # else find and check next target
                 cur_target = self.reference_path[0]
         
         desired_psi = self.calc_desired_direction(cur_pos, cur_target)
-        psi_err = desired_psi - cur_psi
-        psi_err %= 2*np.pi
-        psi_err = psi_err - 2*np.pi if psi_err > np.pi else psi_err
 
-        return False, psi_err
+        if self.output_err_flag:
+            psi_err = desired_psi - cur_psi
+            psi_err %= 2*np.pi
+            psi_err = psi_err - 2*np.pi if psi_err > np.pi else psi_err
+            return False, psi_err
+        else:
+            return False, desired_psi
 
     @property
     def current_target(self):
