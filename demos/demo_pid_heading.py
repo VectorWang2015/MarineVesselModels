@@ -128,7 +128,7 @@ if __name__ == "__main__":
     thruster = NaiveDoubleThruster(b=sample_b_2)
     # control inner loop, r as target
     diff_controller = DoubleLoopHeadingPID(
-                dt=time_step,
+                dt=control_step,
                 # outer loop (psi -> r)
                 psi_kp=1, psi_ki=0.2, psi_kd=0.05,
                 r_ref_lim=0.45,           # staturation for r (rad/s)
