@@ -11,6 +11,7 @@ from control.los import LOSGuider
 
 
 if __name__ == "__main__":
+    # case1, double loop heading control, const base_N
     """
     time_step = 0.1
     total_exp_steps = 2000
@@ -154,6 +155,7 @@ if __name__ == "__main__":
     plt.show()
     """
 
+    # case 2, PID for stable u, Double-loop for heading control
     time_step = 0.1
     total_exp_steps = 2000
     control_step = 0.2
