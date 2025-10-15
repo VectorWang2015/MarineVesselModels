@@ -17,7 +17,6 @@ def u_experiment(
             max_base_N,
             Q_err,
             R_F,
-            eps_ref,
 ):
     # setup noise simuls
     # std dev for x, y, psi, u, v, r
@@ -46,7 +45,7 @@ def u_experiment(
         d11=sample_hydro_params_2["X_u"],
         Q_err=Q_err,
         R_F=R_F,
-        eps_ref=eps_ref,
+        control_lim=max_base_N,
     )
 
     ts = []
@@ -62,7 +61,6 @@ def u_experiment(
         if t % control_every == 0:
             # calculate new tau
             control_signal = u_controller.step(tgt_u=desire_u, u=current_u)
-            control_signal = min(max(-max_base_N, control_signal), max_base_N)
 
             left = control_signal
             right = control_signal
@@ -88,16 +86,13 @@ if __name__ == "__main__":
 
     desire_us = [0.4, 0.6, 0.8, 1.0, 1.2]
 
-    max_base_N = 100.0
-    kp = 150
-    ki = 200
-    kd = 5
+    max_base_N = 120.0
 
     fig, axs = plt.subplots(3, 1)
 
     for desire_u in desire_us:
         ts, us, u_errs, control_sigs = u_experiment(time_step=time_step, total_control_steps=total_control_steps, control_step=control_step,
-                     desire_u=desire_u, max_base_N=max_base_N, Q_err=1, R_F=0.2, eps_ref=1e-9)
+                     desire_u=desire_u, max_base_N=max_base_N, Q_err=10000, R_F=1)
     
         axs[0].plot(ts, us, label=f"$u={desire_u}$")
         axs[0].legend()

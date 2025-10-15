@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.linalg import solve_continuous_are
+from typing import Optional
 
 
 class HeadingLQR():
@@ -10,6 +11,7 @@ class HeadingLQR():
             b: float,
             Q: np.ndarray,
             R: np.ndarray,
+            control_lim: Optional[float] = None,
     ):
         """
         state: [tgt_psi - psi, r]
@@ -25,13 +27,19 @@ class HeadingLQR():
         self.P = solve_continuous_are(a=self.A, b=self.B, q=Q, r=R)
         self.K = - np.linalg.inv(R) @ self.B.T @ self.P
 
+        self.control_lim = control_lim
+
     def step(
             self,
             error_psi: float,
             r: float,
     ) -> float:
         state = np.array([[error_psi], [r]])
-        return (self.K@state)[0][0]
+        u = (self.K@state)[0][0]
+        if self.control_lim is None:
+            return u
+        else:
+            return max(min(u, self.control_lim), - self.control_lim)
 
 
 class VeloLQR():
@@ -41,19 +49,23 @@ class VeloLQR():
             d11: float,
             Q_err: float,
             R_F: float,
-            eps_ref: float = 0.,
+            control_lim: Optional[float] = None,
     ):
         """
-        state should be [error_u, tgt_u]
-        Q for tgt_u should be 0
+        state should be [error_u]
+        use Forward-feed
         """
-        self.A = np.array([[-d11/m11, d11/m11], [0, 0]])
-        self.B = np.array([[-2/m11], [0]])
-        self.Q = np.diag([Q_err, eps_ref])
+        self.d11 = d11
+        self.m11 = m11
+        self.A = np.array([[-d11/m11]])
+        self.B = np.array([[-2/m11]])
+        self.Q = np.diag([[Q_err]])
         self.R = np.array([[R_F]])
 
         self.P = solve_continuous_are(a=self.A, b=self.B, q=self.Q, r=self.R)
-        self.K = np.linalg.inv(self.R) @ self.B.T @ self.P
+        self.K = - np.linalg.inv(self.R) @ self.B.T @ self.P
+
+        self.control_lim = control_lim
 
     def step(
             self,
@@ -61,5 +73,12 @@ class VeloLQR():
             tgt_u: float,
     ) -> float:
         error_u = tgt_u - u
-        state = np.array([[error_u], [tgt_u]])
-        return -(self.K@state)[0][0]
+        state = np.array([[error_u]])
+
+        ff = self.d11 / 2 * tgt_u
+        control = ff + (self.K@state)[0][0]
+
+        if self.control_lim is None:
+            return control
+        else:
+            return max(min(control, self.control_lim), - self.control_lim)
