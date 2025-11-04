@@ -127,6 +127,51 @@ class FixedDistLOSGuider(LOSGuider):
 
         self.los_dist = los_dist
 
+    def calc_los_target(
+            self,
+    ):
+        """
+        return a target point
+        segment should be a line from the desired trajectory, a tuple of start and end point
+        should be guided to start or end point if each pt on the desired path is beyond the guide distance
+        """
+        guide_line_dist = self.los_dist
+        line_pt1 = np.array(self.former_waypoint)
+        line_pt2 = np.array(self.current_waypoint)
+        current_pos = self.cur_pos
+
+        l2 = np.sum((line_pt2-line_pt1)**2)
+    
+        line_vec = (line_pt2 - line_pt1) / np.sqrt(l2)
+
+        proportion = np.dot(line_pt2-line_pt1, current_pos-line_pt1) / l2
+        perpendicular_pt = proportion * (line_pt2 - line_pt1) + line_pt1
+        dist = np.linalg.norm(perpendicular_pt-current_pos)
+
+        #breakpoint()
+        if dist >= guide_line_dist:
+            if proportion <= 0:
+                return line_pt1
+            elif proportion >= 1:
+                return line_pt2
+            else:
+                return perpendicular_pt
+
+        elif dist < guide_line_dist:
+            remaining_length = np.sqrt(guide_line_dist**2 - dist**2)
+            remaining_vec = remaining_length * line_vec
+            target_pt = perpendicular_pt + remaining_vec
+            target_pt_proportion = np.dot(target_pt - line_pt1, line_vec) / np.sqrt(l2)
+            if target_pt_proportion <= 0:
+                return line_pt1
+            elif target_pt_proportion >= 1:
+                return line_pt2
+            else:
+                return target_pt
+
+        else:
+            raise Exception
+
     @property
     def current_target(self):
         """
@@ -135,8 +180,7 @@ class FixedDistLOSGuider(LOSGuider):
             * current (next) way point (if way point within los_dist)
             * a point that is on the way line, and is los_dist from cur_pos (otherwise)
         """
-        raise Exception
-        return self.current_waypoint
+        return self.calc_los_target()
 
     def step(
             self,
@@ -174,3 +218,57 @@ class FixedDistLOSGuider(LOSGuider):
             return False, psi_err
         else:
             return False, desired_psi
+
+
+class DynamicDistLOSGuider(FixedDistLOSGuider):
+    """
+    """
+    def __init__(
+            self,
+            waypoints: Iterable[Tuple[float, float]],
+            reached_threshold: float,
+            forward_dist: float,
+            output_err_flag: bool = True,
+    ):
+        """
+        """
+        self.reference_path = waypoints[:]
+        self.reached_threshold = reached_threshold
+        self.output_err_flag = output_err_flag
+        self.forward_dist = forward_dist
+
+        self.former_waypoint = None
+        self.current_waypoint = None
+        self.cur_pos = None
+
+    def calc_los_target(
+            self,
+    ):
+        """
+        return a target point
+        guider logic see: <Path following control system for a tanker ship model>
+        """
+        remaining_length = self.forward_dist
+        line_pt1 = np.array(self.former_waypoint)
+        line_pt2 = np.array(self.current_waypoint)
+        current_pos = self.cur_pos
+
+        l2 = np.sum((line_pt2-line_pt1)**2)
+    
+        line_vec = (line_pt2 - line_pt1) / np.sqrt(l2)
+
+        proportion = np.dot(line_pt2-line_pt1, current_pos-line_pt1) / l2
+        perpendicular_pt = proportion * (line_pt2 - line_pt1) + line_pt1
+        #dist = np.linalg.norm(perpendicular_pt-current_pos)
+
+        #breakpoint()
+        #remaining_length = np.sqrt(guide_line_dist**2 - dist**2)
+        remaining_vec = remaining_length * line_vec
+        target_pt = perpendicular_pt + remaining_vec
+        target_pt_proportion = np.dot(target_pt - line_pt1, line_vec) / np.sqrt(l2)
+        if target_pt_proportion <= 0:
+            return line_pt1
+        elif target_pt_proportion >= 1:
+            return line_pt2
+        else:
+            return target_pt
