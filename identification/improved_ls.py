@@ -143,3 +143,169 @@ class WeightedRidgeLSFossen:
 
         return {"Fx_RMS": rms_fx, "Fy_RMS": rms_fy, "Nr_RMS": rms_nr}
 
+
+
+class WeightedRidgeLSThruster:
+    r"""
+    Assume:
+        F = cun + d|n|n
+    Improvements:
+      - SG smooth/differential
+      - column normalization
+      - WLS
+      - Ridge regularization
+    """
+
+    def __init__(
+        self,
+        time_step: float,
+        b: float,
+        SG_window: int = 11,
+        weights=(1.0, 2.5),   # (Fx, Fy, Nr) weight
+        lam: float = 1e-3,          # ridge regularization weight
+        enable_filter: bool = True,
+    ):
+        self.b = b  # width, distance between two thrusters
+        self.time_step = time_step
+        self.SG_window = SG_window
+        self.weights = weights
+        self.lam = lam
+        self.scale = None
+        self.theta = None
+
+        self.enable_filter = enable_filter
+
+    def set_hydro_params(
+        self,
+        m11: float,
+        m22: float,
+        m33: float,
+        d11: float,
+        d22: float,
+        d33: float,
+    ):
+        self.m11 = m11
+        self.m22 = m22
+        self.m33 = m33
+        self.d11 = d11
+        self.d22 = d22
+        self.d33 = d33
+
+    def _theta_to_params(self, theta: np.array) -> Dict[str, float]:
+        return {
+            "c": theta[0, 0],
+            "d": theta[1, 0],
+        }
+
+    def smooth_fn(self, signals):
+        return savgol_filter(signals, window_length=self.SG_window, polyorder=3)
+
+    def dot_fn(self, signals):
+        return savgol_filter(
+            signals, window_length=self.SG_window,
+            polyorder=3, deriv=1, delta=self.time_step
+        )
+
+    def construct_matrices(
+            self,
+            us: np.array,
+            vs: np.array,
+            rs: np.array,
+            dot_us: np.array,
+            dot_vs: np.array,
+            dot_rs: np.array,
+            rps_ls: np.array,
+            rps_rs: np.array,
+    ) -> Dict[str, float]:
+        # hydro params should exist before this func is called
+        assert hasattr(self, "m11")
+
+        if self.enable_filter:
+            us = self.smooth_fn(us)
+            vs = self.smooth_fn(vs)
+            rs = self.smooth_fn(rs)
+    
+            dot_us = self.smooth_fn(dot_us)
+            dot_vs = self.smooth_fn(dot_vs)
+            dot_rs = self.smooth_fn(dot_rs)
+
+        Hs, Ys = [], []
+        for i in range(us.shape[0] - 1):
+            u, v, r = us[i], vs[i], rs[i]
+            dot_u, _, dot_r = dot_us[i], dot_vs[i], dot_rs[i]
+            rps_l, rps_r = rps_ls[i], rps_rs[i]
+
+            tau_i = np.array([
+                [self.m11*dot_u - self.m22*v*r + self.d11*u],
+                [self.m33*dot_r + self.m22*u*v - self.m11*u*v + self.d33*r],
+            ])
+
+            H_i = np.array([
+                [u*(rps_l + rps_r), abs(rps_l)*rps_l + abs(rps_r)*rps_r],
+                [u*(self.b/2)*(rps_l - rps_r), (self.b/2)*(abs(rps_l)*rps_l - abs(rps_r)*rps_r)],  # 注意符号
+            ])
+
+            Hs.append(H_i)
+            Ys.append(tau_i)
+
+        H = np.vstack(Hs)
+        y = np.vstack(Ys)
+
+        self.H = H
+        self.y = y
+
+        return H, y
+
+    def identificate(
+            self,
+            us: np.array,
+            vs: np.array,
+            rs: np.array,
+            dot_us: np.array,
+            dot_vs: np.array,
+            dot_rs: np.array,
+            rps_ls: np.array,
+            rps_rs: np.array,
+    ) -> Dict[str, float]:
+        """
+        """
+        H, y = self.construct_matrices(us, vs, rs, dot_us, dot_vs, dot_rs, rps_ls, rps_rs)
+
+        # column norm, 1e-12 for perventing 0
+        self.scale = np.linalg.norm(H, axis=0) + 1e-12
+        Hs = H / self.scale
+
+        # channel weight
+        w_x, w_r = self.weights
+        N = rps_ls.shape[0]
+        W = np.diag([w_x, w_r]*N)
+
+        # ridge regularization
+        A = Hs.T @ W @ Hs + self.lam * np.eye(Hs.shape[1])
+        b = Hs.T @ W @ y
+        # linalg.solve soves a well-determined full-rank, linear matrix equation Ax=b
+        theta_s = np.linalg.solve(A, b)
+
+        # denorm
+        self.theta = theta_s / self.scale.reshape(-1, 1)
+
+        return self._theta_to_params(self.theta)
+    
+    def compute_residuals(self) -> Dict[str, float]:
+        """
+        returns residuals for each channel: Fx, Nr
+        """
+        if self.theta is None or self.H is None or self.y is None:
+            raise RuntimeError("call identificate() first!")
+
+        y_pred = self.H @ self.theta
+        residuals = self.y - y_pred
+
+        res_fx = residuals[0::2]
+        res_nr = residuals[1::2]
+       
+        rms_fx = np.sqrt(np.mean(res_fx**2))
+        rms_nr = np.sqrt(np.mean(res_nr**2))
+
+        return {"Fx_RMS": rms_fx, "Nr_RMS": rms_nr}
+
