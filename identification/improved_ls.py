@@ -77,7 +77,7 @@ class WeightedRidgeLSFossen:
             H_i = np.array([
                 [dot_u, -v*r, 0, u, 0, 0],
                 [u*r, dot_v, 0, 0, v, 0],
-                [u*v, -u*v, dot_r, 0, 0, r],
+                [-u*v, u*v, dot_r, 0, 0, r],
             ])
 
             Hs.append(H_i)

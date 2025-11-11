@@ -21,10 +21,10 @@ def dot_fn(signals, window_size=11, time_step=0.1):
     )
 
 if __name__ == "__main__":
-    train_data = np.load("./demos/Fossen_PRBS_0.1_900.npy")
-    partial_data = np.load("./demos/partial_Fossen_PRBS_0.1_900.npy")
-    noisy_train_data = np.load("./demos/noised_Fossen_PRBS_0.1_900.npy")
-    with open("./demos/noised_Fossen_PRBS_0.1_900.pickle.obj", "rb") as fd:
+    train_data = np.load("./exp_data/Fossen_PRBS_0.1_900.npy")
+    partial_data = np.load("./exp_data/partial_Fossen_PRBS_0.1_900.npy")
+    noisy_train_data = np.load("./exp_data/noised_Fossen_PRBS_0.1_900.npy")
+    with open("./exp_data/noised_Fossen_PRBS_0.1_900.pickle.obj", "rb") as fd:
         noisy_real_data = load(fd)
     noisy_partial_data = np.hstack(noisy_real_data["partials"])
     
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     print(20*"-")
 
     # identificate zigzag data
-    zigzag_data = np.load("./demos/Fossen_zigzag_20_50_20_0.01.npy")
+    zigzag_data = np.load("./exp_data/Fossen_zigzag_20_50_20_0.01.npy")
     time_step = 0.01
 
     identifier = LeastSquareFossen(time_step=time_step)
@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     # use 1800 set as validation set
     dt = 0.1
-    val_data = np.load("./demos/Fossen_PRBS_0.1_1800.npy")
+    val_data = np.load("./exp_data/Fossen_PRBS_0.1_1800.npy")
 
     # check 90 seconds
     val_data = val_data[:,:900]
