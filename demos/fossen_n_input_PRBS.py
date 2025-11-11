@@ -17,19 +17,22 @@ def fossen_nps_prbs(
         r_seq,
 ):
     states = None
+    partial_states = None
     for rps_l, rps_r in zip(l_seq, r_seq):
         # use rps and current u as input, to compute tau
         u = current_state[3][0]
         tau = thruster.n_to_tau(l_nps=rps_l, r_nps=rps_r, u=u)
         current_state_with_tau = np.vstack((current_state, tau))
         states = current_state_with_tau if states is None else np.hstack((states, current_state_with_tau))
-        
-        current_state = simulator.step(tau)
+
+        current_state, current_partial_state = simulator.step(tau)
+        # state is one-step ahead of partial_state
+        partial_states = current_partial_state if partial_states is None else np.hstack((partial_states, current_partial_state))
 
     current_state_with_tau = np.vstack((current_state, tau))
     states = current_state_with_tau if states is None else np.hstack((states, current_state_with_tau))
 
-    return states
+    return states, partial_states
 
 
 if __name__ == "__main__":
@@ -63,6 +66,7 @@ if __name__ == "__main__":
     Sigma = np.diag(sigmas**2)
     tau_noise_gen = GaussMarkovNoiseGenerator(dt=time_step, Sigma=Sigma, tau=tau_vec)
 
+    """
     simulator = NoisyVesselSimulator(
         sample_hydro_params_2,
         time_step=time_step,
@@ -70,16 +74,17 @@ if __name__ == "__main__":
         init_state=current_obsv,
         obsv_noise_gen=obsv_noise_gen,
         tau_noise_gen=tau_noise_gen,
+        output_partial=True,
     )
-
     """
+
     simulator = VesselSimulator(
         sample_hydro_params_2,
         time_step=time_step,
         model=Fossen,
         init_state=current_obsv,
+        output_partial=True,
     )
-    """
     thruster = NpsDoubleThruster(b=sample_b_2, **sample_thrust_params_2)
 
     # check & plot F_x, N_r
@@ -93,7 +98,7 @@ if __name__ == "__main__":
     plt.show()
 
     
-    states = fossen_nps_prbs(
+    states, partial_states = fossen_nps_prbs(
         simulator=simulator,
         thruster=thruster,
         current_state=current_obsv,
@@ -117,14 +122,17 @@ if __name__ == "__main__":
     axs[3].legend()
     plt.show()
     
-    #np.save("Fossen_PRBS_0.1_900.npy", states)
     print(states.shape)
+    print(partial_states.shape)
     xs = list(states[0])
     ys = list(states[1])
     psis = list(states[2])
     us = list(states[3])
     vs = list(states[4])
     rs = list(states[5])
+    dot_us = list(partial_states[3])
+    dot_vs = list(partial_states[4])
+    dot_rs = list(partial_states[5])
     Fxs = list(states[6])
     Fys = list(states[7])
     Nrs = list(states[8])
@@ -137,6 +145,9 @@ if __name__ == "__main__":
     us = [float(u) for u in us]
     vs = [float(v) for v in vs]
     rs = [float(r) for r in rs]
+    dot_us = [float(dot_u) for dot_u in dot_us]
+    dot_vs = [float(dot_v) for dot_v in dot_vs]
+    dot_rs = [float(dot_r) for dot_r in dot_rs]
     Fxs = [float(Fx) for Fx in Fxs]
     Fys = [float(Fy) for Fy in Fys]
     Nrs = [float(Nr) for Nr in Nrs]
@@ -150,6 +161,9 @@ if __name__ == "__main__":
         "us": us,
         "vs": vs,
         "rs": rs,
+        "dot_us": dot_us,
+        "dot_vs": dot_vs,
+        "dot_rs": dot_rs,
         "Fxs": Fxs,
         "Fys": Fys,
         "Nrs": Nrs,
@@ -157,5 +171,5 @@ if __name__ == "__main__":
         "rps_r": nps_r,
     }
 
-    with open("noised_Fossen_PRBS_nps_0.1_900.json", "w") as fd:
+    with open("Fossen_PRBS_nps_0.1_900.json", "w") as fd:
         fd.write(dumps(exp_record))
