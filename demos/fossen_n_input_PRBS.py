@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 from json import dumps
 
 from MarineVesselModels.simulator import VesselSimulator, NoisyVesselSimulator
-from MarineVesselModels.thrusters import NpsDoubleThruster
+from MarineVesselModels.thrusters import NpsDoubleThruster, rps_regularize
 from MarineVesselModels.Fossen import sample_b_2, sample_hydro_params_2, sample_thrust_params_2, Fossen
 from identification.PRBS import generate_dualthruster_prbs
 from MarineVesselModels.noises import GaussianNoiseGenerator, GaussMarkovNoiseGenerator
@@ -42,6 +42,8 @@ if __name__ == "__main__":
     base_nps = 110
     delta_sum_nps = 60
     delta_diff_nps = 40
+
+    rps_limit_per_s = 100
     
     current_obsv = np.array([0, 0, 0, 0, 0, 0]).reshape([6, 1])
 
@@ -55,6 +57,13 @@ if __name__ == "__main__":
         seed=114514,
     )
 
+    nps_l = rps_regularize(nps_l, time_step=time_step, rps_per_second=rps_limit_per_s)
+    nps_r = rps_regularize(nps_r, time_step=time_step, rps_per_second=rps_limit_per_s)
+
+    plt.plot(np.arange(len(nps_l)), nps_l)
+    plt.plot(np.arange(len(nps_l)), nps_r)
+    plt.show()
+
     # setup noise simuls
     # std dev for x, y, psi, u, v, r
     sigmas = np.array([0.05, 0.05, 1/180*3.1415, 0.01, 0.01, 0.005])
@@ -66,7 +75,6 @@ if __name__ == "__main__":
     Sigma = np.diag(sigmas**2)
     tau_noise_gen = GaussMarkovNoiseGenerator(dt=time_step, Sigma=Sigma, tau=tau_vec)
 
-    """
     simulator = NoisyVesselSimulator(
         sample_hydro_params_2,
         time_step=time_step,
@@ -77,7 +85,6 @@ if __name__ == "__main__":
         output_partial=True,
     )
     """
-
     simulator = VesselSimulator(
         sample_hydro_params_2,
         time_step=time_step,
@@ -85,6 +92,7 @@ if __name__ == "__main__":
         init_state=current_obsv,
         output_partial=True,
     )
+    """
     thruster = NpsDoubleThruster(b=sample_b_2, **sample_thrust_params_2)
 
     # check & plot F_x, N_r
@@ -171,5 +179,5 @@ if __name__ == "__main__":
         "rps_r": nps_r,
     }
 
-    with open("Fossen_PRBS_nps_0.1_900.json", "w") as fd:
+    with open("exp_data/noised_Fossen_PRBS_nps_0.1_900.json", "w") as fd:
         fd.write(dumps(exp_record))

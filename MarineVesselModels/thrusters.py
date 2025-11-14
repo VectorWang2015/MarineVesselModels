@@ -1,4 +1,39 @@
 import numpy as np
+from typing import Iterable, List
+
+
+def rps_regularize(
+        rps_series: Iterable[float],
+        time_step: float,
+        rps_per_second: float,
+) -> List[float]:
+    """
+    This func intends to create rps control series that
+    has rps inc/dec limits like a real thruster
+    Input:
+        rps_series: desired rps command in series
+        time_step: delta t between each command
+        rps per second: rps can only inc/dec that limit within a second
+    Returns:
+        a series of rps that meets such limit
+    """
+    current_rps = None
+    rps_per_dt = time_step * rps_per_second
+
+    regularized_rps = []
+
+    for rps in rps_series:
+        if current_rps is None:
+            current_rps = rps
+        elif rps > current_rps:
+            current_rps = min(rps, current_rps+rps_per_dt)
+        elif rps <= current_rps:
+            current_rps = max(rps, current_rps-rps_per_dt)
+        else:
+            raise Exception()
+
+        regularized_rps.append(current_rps)
+    return regularized_rps
 
 
 class NaiveDoubleThruster():
