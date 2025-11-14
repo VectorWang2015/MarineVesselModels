@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     # train from noisy data
     identifier = WeightedRidgeLSThruster(
-        time_step=time_step, weights=(1, 100), lam=1e-7, enable_filter=False, b=sample_b_2,
+        time_step=time_step, weights=(1, 100), lam=1e-7, enable_filter=True, b=sample_b_2,
     )
     identifier.set_hydro_params(
         m11=sample_hydro_params_2["m11"],
