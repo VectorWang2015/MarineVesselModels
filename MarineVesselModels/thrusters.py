@@ -62,6 +62,14 @@ class NpsThruster():
         self.c = c
         self.d = d
 
+    def update_params(
+            self,
+            c,
+            d,
+    ):
+        self.c = c
+        self.d = d
+
     def n_to_newton(
             self,
             n,
@@ -84,6 +92,14 @@ class NpsDoubleThruster(NaiveDoubleThruster):
         self.b = b
         self.l_thrust = NpsThruster(c=c, d=d)
         self.r_thrust = NpsThruster(c=c, d=d)
+
+    def update_params(
+            self,
+            c,
+            d,
+    ):
+        self.l_thrust.update_params(c, d)
+        self.r_thrust.update_params(c, d)
 
     def n_to_tau(
             self,

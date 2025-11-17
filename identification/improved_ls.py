@@ -2,6 +2,8 @@ import numpy as np
 from typing import Dict
 from scipy.signal import savgol_filter
 
+from MarineVesselModels.thrusters import NpsDoubleThruster
+
 
 class WeightedRidgeLSFossen:
     r"""
@@ -91,7 +93,7 @@ class WeightedRidgeLSFossen:
 
         return H, y
 
-    def identificate(
+    def identify(
             self,
             us: np.array,
             vs: np.array,
@@ -128,7 +130,7 @@ class WeightedRidgeLSFossen:
         returns residuals for each channel: Fx, Fy, Nr
         """
         if self.theta is None or self.H is None or self.y is None:
-            raise RuntimeError("call identificate() first!")
+            raise RuntimeError("call identify() first!")
 
         y_pred = self.H @ self.theta
         residuals = self.y - y_pred
@@ -256,7 +258,7 @@ class WeightedRidgeLSThruster:
 
         return H, y
 
-    def identificate(
+    def identify(
             self,
             us: np.array,
             vs: np.array,
@@ -296,7 +298,7 @@ class WeightedRidgeLSThruster:
         returns residuals for each channel: Fx, Nr
         """
         if self.theta is None or self.H is None or self.y is None:
-            raise RuntimeError("call identificate() first!")
+            raise RuntimeError("call identify() first!")
 
         y_pred = self.H @ self.theta
         residuals = self.y - y_pred
@@ -309,3 +311,105 @@ class WeightedRidgeLSThruster:
 
         return {"Fx_RMS": rms_fx, "Nr_RMS": rms_nr}
 
+
+class AltLS():
+    def __init__(
+            self,
+            time_step: float,
+            b: float,
+            init_thru_params: Dict,
+            hull_ls_params: Dict,
+            thru_ls_params: Dict,
+    ):
+        self.hull_ls = WeightedRidgeLSFossen(
+            time_step=time_step, **hull_ls_params,
+        )
+        self.thru_ls = WeightedRidgeLSThruster(
+            time_step=time_step, b=b, **thru_ls_params,
+        )
+
+        self.current_hull_params = None
+        self.current_thru_params = init_thru_params.copy()
+
+        self.thruster = NpsDoubleThruster(b=b, **init_thru_params)
+
+        self.current_result = None
+
+    def calcul_result_relative_difference(
+        self,
+        prev_result: Dict,
+        curr_result: Dict,
+    ) -> Dict:
+        result_diff = {}
+        for key in prev_result:
+            prev_v = prev_result[key]
+            curr_v = curr_result[key]
+            if prev_v != 0:
+                relative_diff = (curr_v - prev_v) / prev_v
+            else:
+                relative_diff = None
+            
+            result_diff[key] = relative_diff
+        return result_diff
+            
+    
+    def rps_to_taus(
+            self,
+            us: np.array,
+            rps_ls: np.array,
+            rps_rs: np.array,
+    ) -> np.array:
+        taus = []
+        self.thruster.update_params(**self.current_thru_params)
+        for u, l, r in zip(us, rps_ls, rps_rs):
+            tau = self.thruster.n_to_tau(l_nps=float(l), r_nps=float(r), u=float(u))
+            taus.append(tau)
+        return np.hstack(taus)
+
+    def identify_once(
+            self,
+            us: np.array,
+            vs: np.array,
+            rs: np.array,
+            dot_us: np.array,
+            dot_vs: np.array,
+            dot_rs: np.array,
+            rps_ls: np.array,
+            rps_rs: np.array,
+    ) -> Dict[str, float]:
+        # generate taus through current thru params
+        taus = self.rps_to_taus(us=us, rps_ls=rps_ls, rps_rs=rps_rs)
+        # identify hull params with current thru params
+        self.current_hull_params = self.hull_ls.identify(
+            us,
+            vs,
+            rs,
+            dot_us,
+            dot_vs,
+            dot_rs,
+            taus,
+        )
+        # identify thru params with current hull params
+        self.thru_ls.set_hydro_params(**self.current_hull_params)
+        self.current_thru_params = self.thru_ls.identify(
+            us,
+            vs,
+            rs,
+            dot_us,
+            dot_vs,
+            dot_rs,
+            rps_ls,
+            rps_rs,
+        )
+        # calcul relative changes
+        if not self.current_result:
+            self.current_result = {**self.current_hull_params, **self.current_thru_params}
+            return self.current_result, None
+        else:
+            prev_result = self.current_result
+            self.current_result = {**self.current_hull_params, **self.current_thru_params}
+            relative_difference = self.calcul_result_relative_difference(
+                prev_result,
+                self.current_result,
+            )
+            return self.current_result, relative_difference
