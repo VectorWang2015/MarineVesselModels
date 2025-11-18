@@ -38,7 +38,7 @@ if __name__ == "__main__":
     F_x = np.array(exp_record["Fxs"])
     N_r = np.array(exp_record["Nrs"])
 
-    # identificate prbs train_data
+    # identify prbs train_data
     time_step = 0.1
 
     # train from noisy data
@@ -53,7 +53,7 @@ if __name__ == "__main__":
         d22=sample_hydro_params_2["Y_v"],
         d33=sample_hydro_params_2["N_r"],
     )
-    noisy_result = identifier.identificate(
+    noisy_result = identifier.identify(
         us=us,
         vs=vs,
         rs=rs,
