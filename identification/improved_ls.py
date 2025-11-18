@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Dict
+from typing import Tuple, Dict
 from scipy.signal import savgol_filter
 
 from MarineVesselModels.thrusters import NpsDoubleThruster
@@ -366,6 +366,13 @@ class AltLS():
             taus.append(tau)
         return np.hstack(taus)
 
+    def calcul_max_diff(
+            self,
+            relative_diff: Dict,
+    ) -> float:
+        diffs = [abs(relative_diff[key]) for key in relative_diff]
+        return max(diffs)
+
     def identify_once(
             self,
             us: np.array,
@@ -376,7 +383,7 @@ class AltLS():
             dot_rs: np.array,
             rps_ls: np.array,
             rps_rs: np.array,
-    ) -> Dict[str, float]:
+    ) -> Tuple[Dict, Dict]:
         # generate taus through current thru params
         taus = self.rps_to_taus(us=us, rps_ls=rps_ls, rps_rs=rps_rs)
         # identify hull params with current thru params
@@ -413,3 +420,24 @@ class AltLS():
                 self.current_result,
             )
             return self.current_result, relative_difference
+
+    def identify(
+            self,
+            us: np.array,
+            vs: np.array,
+            rs: np.array,
+            dot_us: np.array,
+            dot_vs: np.array,
+            dot_rs: np.array,
+            rps_ls: np.array,
+            rps_rs: np.array,
+            max_epochs: float,
+            end_criteria: float,
+    ) -> Tuple[Dict, Dict]:
+        for i in range(max_epochs):
+            current_result, relative_difference = self.identify_once(
+                us, vs, rs, dot_us, dot_vs, dot_rs, rps_ls, rps_rs,
+            )
+            if relative_difference is not None and self.calcul_max_diff(relative_difference) <= end_criteria:
+                break
+        return current_result, relative_difference
