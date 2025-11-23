@@ -441,3 +441,157 @@ class AltLS():
             if relative_difference is not None and self.calcul_max_diff(relative_difference) <= end_criteria:
                 break
         return current_result, relative_difference
+
+
+class WeightedRidgeLSFossenRps:
+    r"""
+    Identify Fossen and thruster parameters with known m11
+    """
+
+    def __init__(
+        self,
+        time_step: float,
+        m11: float,
+        b: float,
+        SG_window: int = 11,
+        weights=(1.0, 1.0, 2.5),   # (Fx, Fy, Nr) weight
+        lam: float = 1e-3,          # ridge regularization weight
+        enable_filter: bool = True,
+    ):
+        self.b = b
+        self.m11 = m11
+
+        self.time_step = time_step
+        self.SG_window = SG_window
+        self.weights = weights
+        self.lam = lam
+        self.scale = None
+        self.theta = None
+
+        self.enable_filter = enable_filter
+
+    def _theta_to_params(self, theta: np.array) -> Dict[str, float]:
+        return {
+            "m11": self.m11,
+            "m22": float(theta[0, 0]),
+            "m33": float(theta[1, 0]),
+            "d11": float(theta[2, 0]),
+            "d22": float(theta[3, 0]),
+            "d33": float(theta[4, 0]),
+            "c": float(theta[5, 0]),
+            "d": float(theta[6, 0]),
+        }
+
+    def smooth_fn(self, signals):
+        return savgol_filter(signals, window_length=self.SG_window, polyorder=3)
+
+    def dot_fn(self, signals):
+        return savgol_filter(
+            signals, window_length=self.SG_window,
+            polyorder=3, deriv=1, delta=self.time_step
+        )
+
+    def construct_matrices(
+            self,
+            us: np.array,
+            vs: np.array,
+            rs: np.array,
+            dot_us: np.array,
+            dot_vs: np.array,
+            dot_rs: np.array,
+            rps_ls: np.array,
+            rps_rs: np.array,
+    ) -> Dict[str, float]:
+
+        if self.enable_filter:
+            us = self.smooth_fn(us)
+            vs = self.smooth_fn(vs)
+            rs = self.smooth_fn(rs)
+    
+            dot_us = self.smooth_fn(dot_us)
+            dot_vs = self.smooth_fn(dot_vs)
+            dot_rs = self.smooth_fn(dot_rs)
+
+        Hs, Ys = [], []
+        for i in range(us.shape[0] - 1):
+            u, v, r = us[i], vs[i], rs[i]
+            dot_u, dot_v, dot_r = dot_us[i], dot_vs[i], dot_rs[i]
+            l, r_rps = rps_ls[i], rps_rs[i]
+
+            H_i = np.array([
+                [-v*r, 0, u, 0, 0,
+                    -u*(l+r_rps), -(abs(l)*l + abs(r_rps)*r_rps)],
+                [dot_v, 0, 0, v, 0,
+                    0, 0],
+                [u*v, dot_r, 0, 0, r,
+                    -self.b*u*(l-r_rps)/2, -self.b*(abs(l)*l - abs(r_rps)*r_rps)/2],
+            ])
+            Y_i = np.array([
+                [-self.m11*dot_u],
+                [-self.m11*u*r],
+                [self.m11*u*v],
+            ])
+
+            Hs.append(H_i)
+            Ys.append(Y_i)
+
+        H = np.vstack(Hs)
+        y = np.vstack(Ys)
+
+        self.H = H
+        self.y = y
+
+        return H, y
+
+    def identify(
+            self,
+            us: np.array,
+            vs: np.array,
+            rs: np.array,
+            dot_us: np.array,
+            dot_vs: np.array,
+            dot_rs: np.array,
+            rps_ls: np.array,
+            rps_rs: np.array,
+    ) -> Dict[str, float]:
+        H, y = self.construct_matrices(us, vs, rs, dot_us, dot_vs, dot_rs, rps_ls, rps_rs)
+
+        # column norm, 1e-12 for perventing 0
+        self.scale = np.linalg.norm(H, axis=0) + 1e-12
+        Hs = H / self.scale
+
+        # channel weight
+        w_x, w_y, w_r = self.weights
+        N = us.shape[0] - 1
+        W = np.diag([w_x, w_y, w_r]*N)
+
+        # ridge regularization
+        A = Hs.T @ W @ Hs + self.lam * np.eye(Hs.shape[1])
+        b = Hs.T @ W @ y
+        # linalg.solve soves a well-determined full-rank, linear matrix equation Ax=b
+        theta_s = np.linalg.solve(A, b)
+
+        # denorm
+        self.theta = theta_s / self.scale.reshape(-1, 1)
+
+        return self._theta_to_params(self.theta)
+    
+    def compute_residuals(self) -> Dict[str, float]:
+        """
+        returns residuals for each channel: Fx, Fy, Nr
+        """
+        if self.theta is None or self.H is None or self.y is None:
+            raise RuntimeError("call identify() first!")
+
+        y_pred = self.H @ self.theta
+        residuals = self.y - y_pred
+
+        res_fx = residuals[0::3]
+        res_fy = residuals[1::3]
+        res_nr = residuals[2::3]
+
+        rms_fx = np.sqrt(np.mean(res_fx**2))
+        rms_fy = np.sqrt(np.mean(res_fy**2))
+        rms_nr = np.sqrt(np.mean(res_nr**2))
+
+        return {"Fx_RMS": rms_fx, "Fy_RMS": rms_fy, "Nr_RMS": rms_nr}
