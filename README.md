@@ -8,6 +8,15 @@ https://github.com/VectorWang2015/USVWidgets
 
 ## Records
 
+> Fossen_PRBS_nps_tt_xx.json
+
+Fossen model, using PRBS control sequence for xx seconds, time step tt;  
+nps indicats that experiment record generated through rps input PRBS instead of tau.  
+
+data: dict; keys ["xs", "ys", "psis", "us", "vs", "rs", "dot_us", "dot_vs", "dot_rs", "Fxs", "Fys", "Nrs", "rps_l", "rps_r"]  
+
+## Records (obsolete)
+
 > Fossen_zigzag_xx_yy_zz_tt.npy
 
 Fossen model, zigzag case with target psi xx degrees; base thrust xx N for each thrust; delta thrust for turing zz N; time step tt s.  
