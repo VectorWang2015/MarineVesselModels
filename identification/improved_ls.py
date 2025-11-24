@@ -71,7 +71,7 @@ class WeightedRidgeLSFossen:
             dot_rs = self.smooth_fn(dot_rs)
 
         Hs, Ys = [], []
-        for i in range(us.shape[0] - 1):
+        for i in range(dot_us.shape[0]):
             u, v, r = us[i], vs[i], rs[i]
             dot_u, dot_v, dot_r = dot_us[i], dot_vs[i], dot_rs[i]
             tau = taus[:,i].reshape([3, 1])
@@ -111,7 +111,7 @@ class WeightedRidgeLSFossen:
 
         # channel weight
         w_x, w_y, w_r = self.weights
-        N = us.shape[0] - 1
+        N = dot_us.shape[0]
         W = np.diag([w_x, w_y, w_r]*N)
 
         # ridge regularization
@@ -232,7 +232,7 @@ class WeightedRidgeLSThruster:
             dot_rs = self.smooth_fn(dot_rs)
 
         Hs, Ys = [], []
-        for i in range(us.shape[0] - 1):
+        for i in range(dot_us.shape[0]):
             u, v, r = us[i], vs[i], rs[i]
             dot_u, _, dot_r = dot_us[i], dot_vs[i], dot_rs[i]
             rps_l, rps_r = rps_ls[i], rps_rs[i]
@@ -513,7 +513,7 @@ class WeightedRidgeLSFossenRps:
             dot_rs = self.smooth_fn(dot_rs)
 
         Hs, Ys = [], []
-        for i in range(us.shape[0] - 1):
+        for i in range(dot_us.shape[0]):
             u, v, r = us[i], vs[i], rs[i]
             dot_u, dot_v, dot_r = dot_us[i], dot_vs[i], dot_rs[i]
             l, r_rps = rps_ls[i], rps_rs[i]
@@ -562,7 +562,7 @@ class WeightedRidgeLSFossenRps:
 
         # channel weight
         w_x, w_y, w_r = self.weights
-        N = us.shape[0] - 1
+        N = dot_us.shape[0]
         W = np.diag([w_x, w_y, w_r]*N)
 
         # ridge regularization
