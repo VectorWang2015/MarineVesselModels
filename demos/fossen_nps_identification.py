@@ -6,8 +6,10 @@ from json import loads
 from MarineVesselModels.simulator import VesselSimulator
 from MarineVesselModels.Fossen import (
     sample_hydro_params_2, sample_b_2, sample_thrust_2, sample_thrust_params_2,
+    Fossen,
 )
-from identification.improved_ls import AltLS
+from MarineVesselModels.thrusters import NpsDoubleThruster
+from identification.improved_ls import AltLS, WeightedRidgeLSFossenRps
 
 ref_params = {
     "m11": 50.05,
@@ -20,24 +22,61 @@ ref_params = {
     "d": 5.04e-3,
 }
 
+def plot_fossen_nps(
+        ax,
+        label,
+        hydro_params,
+        l_seq,
+        r_seq,
+        current_state = np.array([0, 0, 0, 0, 0, 0]).reshape([6, 1]),
+):
+    xs = []
+    ys = []
+
+    hydro_keys = ["m11", "m22", "m33", "d11", "d22", "d33"]
+    thrus_keys = ["c", "d"]
+    
+    simulator = VesselSimulator(
+        hydro_params={k: hydro_params[k] for k in hydro_keys},
+        time_step=time_step,
+        model=Fossen,
+        init_state=current_state,
+        output_partial=True,
+    )
+    thruster = NpsDoubleThruster(b=sample_b_2, **{k: hydro_params[k] for k in thrus_keys})
+
+    for rps_l, rps_r in zip(l_seq, r_seq):
+        # use rps and current u as input, to compute tau
+        u = current_state[3][0]
+        x, y = current_state[0][0], current_state[1][0]
+        xs.append(x)
+        ys.append(y)
+
+        tau = thruster.n_to_tau(l_nps=rps_l, r_nps=rps_r, u=u)
+        current_state, current_partial_state = simulator.step(tau)
+
+    ax.plot(ys, xs, label=label)
+
 
 def dot_fn(signals, window_size=11, time_step=0.1):
     return savgol_filter(
         signals, window_length=window_size,
         polyorder=3, deriv=1, delta=time_step
     )
+    
 
 if __name__ == "__main__":
-    record_name = "exp_data/Fossen_PRBS_nps_0.1_900.json"
+    record_name = "exp_data/noised_Fossen_PRBS_nps_0.1_900.json"
     with open(record_name) as fd:
         exp_record = loads(fd.read())
 
-    xs = np.array(exp_record["xs"])
-    ys = np.array(exp_record["ys"])
-    psis = np.array(exp_record["psis"])
-    us = np.array(exp_record["us"])
-    vs = np.array(exp_record["vs"])
-    rs = np.array(exp_record["rs"])
+    # original state [x,y,p,u,v,r] contains an extra record
+    xs = np.array(exp_record["xs"])[:-1]
+    ys = np.array(exp_record["ys"])[:-1]
+    psis = np.array(exp_record["psis"])[:-1]
+    us = np.array(exp_record["us"])[:-1]
+    vs = np.array(exp_record["vs"])[:-1]
+    rs = np.array(exp_record["rs"])[:-1]
     dot_us = np.array(exp_record["dot_us"])
     dot_vs = np.array(exp_record["dot_vs"])
     dot_rs = np.array(exp_record["dot_rs"])
@@ -46,10 +85,11 @@ if __name__ == "__main__":
     Nrs = np.array(exp_record["Nrs"])
     rps_ls = np.array(exp_record["rps_l"])
     rps_rs = np.array(exp_record["rps_r"])
-    F_x = np.array(exp_record["Fxs"])
-    N_r = np.array(exp_record["Nrs"])
+    
+    print(ref_params)
 
-    # identificate prbs train_data
+    # identify using ALS
+    # identify prbs train_data
     time_step = 0.1
 
     # real value: c: -1.6e-4, d: 5e-3
@@ -70,9 +110,32 @@ if __name__ == "__main__":
         hull_ls_params=hull_ls_params, thru_ls_params=thru_ls_params,
     )
 
-    difference_records = []
+    identified_result, relative_difference = identifier.identify(
+        us=us,
+        vs=vs,
+        rs=rs,
+        dot_us=dot_us,
+        dot_vs=dot_vs,
+        dot_rs=dot_rs,
+        rps_ls=rps_ls,
+        rps_rs=rps_rs,
+        max_epochs=100,
+        end_criteria=0.01,
+    )
+
+    ref_ratio = ref_params["m11"] / identified_result["m11"]
+
+    ALS_noised_unaligned = {k: float(identified_result[k]) for k in identified_result}
+    ALS_noised = {k: float(identified_result[k]*ref_ratio) for k in identified_result}
+
+    print("-"*20)
+    print("Results identified using ALS, from noised data:")
+    print(ALS_noised_unaligned)
+    print("Aligned")
+    print(ALS_noised)
 
     """
+    # test ALS step by step and trace identified results
     for i in range(50):
         identified_result, relative_difference = identifier.identify_once(
             us=us,
@@ -129,7 +192,15 @@ if __name__ == "__main__":
     axs[2].set_ylabel("Relative change")
     plt.show()
     """
-    identified_result, relative_difference = identifier.identify(
+    time_step = 0.1
+
+    identifier = WeightedRidgeLSFossenRps(
+        time_step=time_step, m11=ref_params["m11"] , b=sample_b_2,
+        SG_window=11, weights=(1, 1, 1),
+        lam=0.001, enable_filter=True,
+    )
+
+    m11_noised = identifier.identify(
         us=us,
         vs=vs,
         rs=rs,
@@ -138,18 +209,49 @@ if __name__ == "__main__":
         dot_rs=dot_rs,
         rps_ls=rps_ls,
         rps_rs=rps_rs,
-        max_epochs=100,
-        end_criteria=0.01,
     )
-    print(f"Refs: {ref_params}")
-    print(f"Identified: {identified_result}")
-    print(f"Difference: {relative_difference}")
 
-    ref_ratio = ref_params["m11"] / identified_result["m11"]
-    # normalize identified_result
-    for key in ref_params:
-        normalized_data = identified_result[key] * ref_ratio
-        error = ref_params[key] - normalized_data
-        error_ratio = error / ref_params[key] * 100
-        print(f"Noramlized {key}: {normalized_data}")
-        print(f"Error {key}: {error_ratio}%")
+    print("-"*20)
+    print("Results identified using m11LS, from noised data:")
+    print(m11_noised)
+
+    # reading validation data
+    record_name = "exp_data/Fossen_PRBS_nps_0.1_90.json"
+    with open(record_name) as fd:
+        exp_record = loads(fd.read())
+    xs = np.array(exp_record["xs"])[:-1]
+    ys = np.array(exp_record["ys"])[:-1]
+    psis = np.array(exp_record["psis"])[:-1]
+    us = np.array(exp_record["us"])[:-1]
+    vs = np.array(exp_record["vs"])[:-1]
+    rs = np.array(exp_record["rs"])[:-1]
+    dot_us = np.array(exp_record["dot_us"])
+    dot_vs = np.array(exp_record["dot_vs"])
+    dot_rs = np.array(exp_record["dot_rs"])
+    Fxs = np.array(exp_record["Fxs"])
+    Fys = np.array(exp_record["Fys"])
+    Nrs = np.array(exp_record["Nrs"])
+    rps_ls = np.array(exp_record["rps_l"])
+    rps_rs = np.array(exp_record["rps_r"])
+
+    fig, ax = plt.subplots()
+    ax.set_aspect("equal")
+    ax.plot(ys, xs, "--", color="k", alpha=0.8, label="Reference")
+
+    plot_fossen_nps(
+        ax=ax, label="m11 LS method, noised data",
+        hydro_params=m11_noised, l_seq=rps_ls, r_seq=rps_rs,
+    )
+    plot_fossen_nps(
+        ax=ax, label="ALS method, noised data",
+        hydro_params=ALS_noised_unaligned, l_seq=rps_ls, r_seq=rps_rs,
+    )
+    """
+    plot_fossen_nps(
+        ax=ax, label="ALS method, noised data, params aligned m11",
+        hydro_params=ALS_noised, l_seq=rps_ls, r_seq=rps_rs,
+    )
+    """
+    
+    ax.legend()
+    plt.show()
