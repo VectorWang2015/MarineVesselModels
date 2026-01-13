@@ -1,0 +1,12 @@
+# Core dependencies for MarineVesselModels
+numpy>=1.20.0
+matplotlib>=3.5.0
+scipy>=1.8.0
+
+# Optional GUI dependencies (for PyQt6-based demos)
+# PyQt6>=6.4.0
+
+# Development dependencies
+# black>=22.0.0
+# ruff>=0.0.270
+# mypy>=0.991
