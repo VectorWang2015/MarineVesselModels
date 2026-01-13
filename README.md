@@ -42,3 +42,23 @@ Fossen model, using PRBS control sequence for xx rounds, time step tt;
 Partial file for dot(state) data storage, which are exported from simulator directly.  
 
 data: 9xn; [x, y, psi, u, v, r, tau1, tau2, tau3]  
+
+## Running Demos
+
+Use the wrapper script to run demos from the project root:
+
+```bash
+python run_demo.py --demo pid_heading
+python run_demo.py --demo fossen_PRBS
+python run_demo.py --list
+```
+
+The wrapper sets `PYTHONPATH` correctly so imports work without copying demo files to root.
+
+## Development Notes
+
+- Demo files use absolute imports (`from MarineVesselModels.simulator import...`)
+- The wrapper script fixes import paths by setting `PYTHONPATH`
+- Most demos create matplotlib plots and block on `plt.show()`
+- GUI demos require PyQt6 (demo_EOT_main.py, simulatorGui.py)
+
