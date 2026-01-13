@@ -12,7 +12,7 @@ import sys
 import os
 import argparse
 import subprocess
-import importlib.util
+
 
 def find_demo_files():
     """Find all Python demo files in the demos/ directory."""
@@ -24,6 +24,7 @@ def find_demo_files():
                 demo_files.append(fname[:-3])  # Remove .py extension
     return sorted(demo_files)
 
+
 def list_demos():
     """List all available demo files."""
     demos = find_demo_files()
@@ -32,18 +33,19 @@ def list_demos():
         print(f"  {demo}")
     return 0
 
+
 def run_demo(demo_name, extra_args):
     """Run a specific demo script."""
     demo_dir = os.path.join(os.path.dirname(__file__), 'demos')
     demo_path = None
-    
+
     # Try different possible file names
     possible_names = [
         f"{demo_name}.py",
         f"demo_{demo_name}.py",
         f"{demo_name}"
     ]
-    
+
     for name in possible_names:
         if not name.endswith('.py'):
             name += '.py'
@@ -51,19 +53,19 @@ def run_demo(demo_name, extra_args):
         if os.path.exists(path):
             demo_path = path
             break
-    
+
     if not demo_path:
         # Check if demo_name is already a full filename in demos
         for fname in os.listdir(demo_dir):
             if fname.endswith('.py') and fname[:-3] == demo_name:
                 demo_path = os.path.join(demo_dir, fname)
                 break
-    
+
     if not demo_path:
         print(f"Error: Demo '{demo_name}' not found in demos/ directory")
         print("Use --list to see available demos")
         return 1
-    
+
     # Set PYTHONPATH to include project root
     project_root = os.path.dirname(__file__)
     env = os.environ.copy()
@@ -71,13 +73,13 @@ def run_demo(demo_name, extra_args):
         env['PYTHONPATH'] = project_root + os.pathsep + env['PYTHONPATH']
     else:
         env['PYTHONPATH'] = project_root
-    
+
     # Run the demo script
     cmd = [sys.executable, demo_path] + extra_args
     print(f"Running: {demo_path}")
     print(f"Command: {' '.join(cmd)}")
     print("-" * 60)
-    
+
     try:
         result = subprocess.run(cmd, env=env, cwd=project_root)
         return result.returncode
@@ -87,6 +89,7 @@ def run_demo(demo_name, extra_args):
     except Exception as e:
         print(f"Error running demo: {e}")
         return 1
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -113,9 +116,8 @@ def main():
         nargs=argparse.REMAINDER,
         help='Additional arguments to pass to the demo script'
     )
-    
+
     args = parser.parse_args()
-    
     if args.list:
         return list_demos()
     elif args.demo:
@@ -123,6 +125,7 @@ def main():
     else:
         parser.print_help()
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())
