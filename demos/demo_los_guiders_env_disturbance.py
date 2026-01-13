@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
+import plot_utils
 
 from MarineVesselModels.simulator import NoisyVesselSimulator, SimplifiedEnvironmentalDisturbanceSimulator
 from MarineVesselModels.thrusters import NaiveDoubleThruster
@@ -115,6 +116,34 @@ if __name__ == "__main__":
     # Initialize figure
     fig, ax = plt.subplots(figsize=(12, 10))
     ax.set_aspect("equal")
+    
+    # Set axis limits with margin
+    margin = 5.0
+    x_min = min(0, min(way_xs)) - margin
+    x_max = max(0, max(way_xs)) + margin
+    y_min = min(0, min(way_ys)) - margin
+    y_max = max(0, max(way_ys)) + margin
+    ax.set_xlim(y_min, y_max)
+    ax.set_ylim(x_min, x_max)
+    
+    # Add background arrows showing environmental force direction
+    plot_utils.add_force_direction_arrows(
+        ax, direction_angle=env_force_direction,
+        arrow_length=3.0, grid_spacing=8.0,
+        arrow_color='lightgray', alpha=0.3, linewidth=1.0,
+        coord_system='NED'
+    )
+    
+    # Add a single arrow for legend
+    legend_x = y_min + 2.0
+    legend_y = x_min + 2.0
+    plot_utils.add_single_force_arrow(
+        ax, legend_x, legend_y, direction_angle=env_force_direction,
+        arrow_length=4.0, arrow_color='lightgray', alpha=0.7,
+        linewidth=2.5, label=f'Environmental force ({env_force_direction/np.pi*180:.0f}°)',
+        coord_system='NED'
+    )
+    
     ax.scatter(way_ys, way_xs, marker="x", label="Desired waypoints", color="black", s=100)
     ax.plot(way_ys, way_xs, "--", color="black", alpha=0.5)
 
