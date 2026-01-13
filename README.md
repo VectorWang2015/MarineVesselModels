@@ -55,6 +55,35 @@ python run_demo.py --list
 
 The wrapper sets `PYTHONPATH` correctly so imports work without copying demo files to root.
 
+## Simulators
+
+The project provides several vessel simulator classes:
+
+### VesselSimulator
+Basic simulator implementing Fossen's marine vessel equations of motion.
+
+### NoisyVesselSimulator
+Extends `VesselSimulator` with Gaussian and Gauss-Markov noise models for control inputs and observations.
+
+### SimplifiedEnvironmentalDisturbanceSimulator
+Extends `VesselSimulator` with constant directional environmental forces (wind/wave).
+- Takes environmental force magnitude and direction (global coordinates) as input
+- Converts global force to body frame based on vessel heading
+- Adds environmental force to control inputs
+- Simplified model: force only, no yaw moment from environment
+
+```python
+from MarineVesselModels.simulator import SimplifiedEnvironmentalDisturbanceSimulator
+
+simulator = SimplifiedEnvironmentalDisturbanceSimulator(
+    hydro_params=sample_hydro_params_2,
+    time_step=0.1,
+    env_force_magnitude=10.0,  # Newtons
+    env_force_direction=np.pi/4,  # radians (45°, northeast)
+    model=Fossen,
+)
+```
+
 ## Development Notes
 
 - Demo files use absolute imports (`from MarineVesselModels.simulator import...`)
