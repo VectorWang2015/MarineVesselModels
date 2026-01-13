@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-from MarineVesselModels.simulator import FossenSimulator
+from MarineVesselModels.simulator import VesselSimulator
 from MarineVesselModels.stepper import time_invariant_simulator_runge_kutta, time_invariant_simulator_euler
 from MarineVesselModels.thrusters import NaiveDoubleThruster
 
@@ -36,7 +36,6 @@ if __name__ == "__main__":
     # scene 1: rotation for hydro setup1
     # diameter should be around 12, for hydro 1
     tau = np.array([9.46*3.75, 0, 5.68*(1.25-2.5)]).reshape([3, 1])
-    
 
     # calculate with runge-kutta
     simulator_rk = LinearFossenSimulator(
@@ -94,10 +93,9 @@ if __name__ == "__main__":
         l_thrust_N=-1.0,
         r_thrust_N=2.5,
     )
-    
 
     # calculate with runge-kutta
-    simulator_rk = FossenSimulator(
+    simulator_rk = VesselSimulator(
         hydro_params_2, time_step=t, step_fn=time_invariant_simulator_runge_kutta)
     rk_xs = []
     rk_ys = []
@@ -115,9 +113,8 @@ if __name__ == "__main__":
         rk_xs.append(x)
         rk_ys.append(y)
 
-
     # calculate with euler
-    simulator_e = FossenSimulator(
+    simulator_e = VesselSimulator(
         hydro_params_2, time_step=t, step_fn=time_invariant_simulator_euler)
     e_xs = []
     e_ys = []
