@@ -11,8 +11,44 @@ from control.pid import DoubleLoopHeadingPID, PIDAW
 from control.los import LOSGuider, FixedDistLOSGuider, DynamicDistLOSGuider, AdaptiveLOSGuider
 
 
+def compute_cross_track_error(guider):
+    """
+    Compute signed cross-track error y_e in path-tangential frame.
+
+    :param guider: LOSGuider instance with former_waypoint, current_waypoint, cur_pos attributes
+    :return: Cross-track error in meters (positive to port side)
+    """
+    if guider.former_waypoint is None or guider.current_waypoint is None or guider.cur_pos is None:
+        return 0.0
+    line_pt1 = guider.former_waypoint
+    line_pt2 = guider.current_waypoint
+    pos = guider.cur_pos
+
+    delta_x = line_pt2[0] - line_pt1[0]
+    delta_y = line_pt2[1] - line_pt1[1]
+    pi_h = np.arctan2(delta_y, delta_x)
+
+    dx = pos[0] - line_pt1[0]
+    dy = pos[1] - line_pt1[1]
+    cross_track_err = -np.sin(pi_h)*dx + np.cos(pi_h)*dy
+    return cross_track_err
+
+
 def test_guider(simulator, thruster, diff_controller, u_controller, guider,
                 current_state, total_exp_steps, control_every):
+    """
+    Run guidance simulation and collect results.
+
+    :param simulator: Vessel simulator
+    :param thruster: Thruster model
+    :param diff_controller: Heading controller
+    :param u_controller: Velocity controller
+    :param guider: LOS guider instance
+    :param current_state: Initial state vector
+    :param total_exp_steps: Maximum simulation steps
+    :param control_every: Control period in steps
+    :return: Dictionary with simulation results
+    """
     ts = []
     psis = []
     psi_errs = []
@@ -23,6 +59,7 @@ def test_guider(simulator, thruster, diff_controller, u_controller, guider,
     us = []
     vs = []
     rs = []
+    y_es = []  # cross-track errors
     is_ended = False
 
     # Initialize control variables (will be set on first control step)
@@ -54,7 +91,10 @@ def test_guider(simulator, thruster, diff_controller, u_controller, guider,
             right = velo_control_signal - diff_control_signal
             tau = thruster.newton_to_tau(left, right)
 
-        # record
+        # record cross-track error (at each step)
+        y_es.append(compute_cross_track_error(guider))
+
+        # record other states
         ts.append(t)
         psis.append(current_psi/np.pi*180)
         psi_errs.append(psi_err/np.pi*180)
@@ -68,12 +108,18 @@ def test_guider(simulator, thruster, diff_controller, u_controller, guider,
 
         # apply tau and step
         current_state = simulator.step(tau)
-    return xs, ys
+
+    return {
+        'xs': xs, 'ys': ys, 'steps': len(xs),
+        'y_es': y_es, 'ts': ts,
+        'psis': psis, 'psi_errs': psi_errs,
+        'us': us, 'vs': vs, 'rs': rs
+    }
 
 
 if __name__ == "__main__":
     time_step = 0.1
-    total_exp_steps = 8000  # Longer for 1000m distance
+    total_exp_steps = 10000
     control_step = 0.2
     control_every = int(control_step / time_step)
 
@@ -95,145 +141,141 @@ if __name__ == "__main__":
     Sigma = np.diag(sigmas**2)
     tau_noise_gen = GaussMarkovNoiseGenerator(dt=time_step, Sigma=Sigma, tau=tau_vec)
 
-    # Waypoints: single line from (0,0) to (1000,1000)
-    waypoints = [
-        (0, 0),
-        (100, 100),
+    # Define two scenarios
+    scenarios = [
+        {
+            'name': 'Straight line',
+            'waypoints': [(0, 0), (100, 100)],
+        },
+        {
+            'name': 'Zigzag path',
+            'waypoints': [(60, 15), (0, 30), (45, 45), (0, 60), (30, 75), (0, 90), (15, 105), (0, 120)],
+        }
     ]
 
-    way_xs = [pt[0] for pt in waypoints]
-    way_ys = [pt[1] for pt in waypoints]
-
-    # Initialize figure
-    fig, ax = plt.subplots(figsize=(12, 10))
-    ax.set_aspect("equal")
-
-    # Set axis limits with margin
-    margin = 100.0
-    x_min = min(0, min(way_xs)) - margin
-    x_max = max(0, max(way_xs)) + margin
-    y_min = min(0, min(way_ys)) - margin
-    y_max = max(0, max(way_ys)) + margin
-    ax.set_xlim(y_min, y_max)
-    ax.set_ylim(x_min, x_max)
-
-    # Add background arrows showing environmental force direction
-    plot_utils.add_force_direction_arrows(
-        ax=ax,
-        direction_angle=env_force_direction,
-        spacing=20.0,  # Larger spacing for larger plot
-    )
-
-    ax.scatter(way_ys, way_xs, marker="x", label="Desired waypoints", color="black", s=100)
-    ax.plot(way_ys, way_xs, "--", color="black", alpha=0.5)
-
-    # Colors for different guiders
-    colors = plt.get_cmap('tab10')(np.linspace(0, 1, 4))  # 4 guiders (including ALOS)
-
-    # Test each guider type with environmental disturbance
+    # Guider configurations
     guider_types = [
         ("Naive LOS", LOSGuider, {"output_err_flag": False}),
         ("Fixed LOS", FixedDistLOSGuider, {"output_err_flag": False, "los_dist": nominal_los_dist}),
         ("Dynamic LOS", DynamicDistLOSGuider, {"output_err_flag": False, "forward_dist": forward_dist}),
         ("Adaptive LOS", AdaptiveLOSGuider, {"output_err_flag": False, "forward_dist": forward_dist,
-                                             "gamma": 0.006, "beta_hat0": 0.0, "dt": control_step}),
+                                             "gamma": 0.005, "beta_hat0": 0.0, "dt": control_step}),
     ]
 
-    print("Running environmental disturbance tests...", flush=True)
-    for idx, (guider_name, GuiderClass, guider_kwargs) in enumerate(guider_types):
-        current_state = np.array([0, 0, -np.pi, 0, 0, 0]).reshape([6, 1])
+    # Colors for different guiders
+    colors = plt.get_cmap('tab10')(np.linspace(0, 1, len(guider_types)))
 
-        simulator = SimplifiedEnvironmentalDisturbanceSimulator(
-            hydro_params=sample_hydro_params_2,
-            time_step=time_step,
-            env_force_magnitude=env_force_magnitude,
-            env_force_direction=env_force_direction,
-            model=Fossen,
-            init_state=current_state,
+    # Initialize 2x2 plot grid
+    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+    ax_path1, ax_path2, ax_err1, ax_err2 = axes.flatten()
+
+    # Store results for error plots
+    all_results = {scenario['name']: {} for scenario in scenarios}
+
+    # Run simulations for each scenario
+    for scenario_idx, scenario in enumerate(scenarios):
+        waypoints = scenario['waypoints']
+        scenario_name = scenario['name']
+
+        # Determine which axes to use
+        if scenario_idx == 0:
+            ax_path = ax_path1
+            ax_err = ax_err1
+        else:
+            ax_path = ax_path2
+            ax_err = ax_err2
+
+        # Plot waypoints
+        way_xs = [pt[0] for pt in waypoints]
+        way_ys = [pt[1] for pt in waypoints]
+
+        # Set axis limits with margin
+        margin = 20.0
+        x_min = min(0, min(way_xs)) - margin
+        x_max = max(0, max(way_xs)) + margin
+        y_min = min(0, min(way_ys)) - margin
+        y_max = max(0, max(way_ys)) + margin
+        ax_path.set_xlim(y_min, y_max)
+        ax_path.set_ylim(x_min, x_max)
+        ax_path.set_aspect("equal")
+
+        # Add background arrows showing environmental force direction
+        plot_utils.add_force_direction_arrows(
+            ax=ax_path,
+            direction_angle=env_force_direction,
+            spacing=10.0,
         )
-        thruster = NaiveDoubleThruster(b=sample_b_2)
 
-        diff_controller = DoubleLoopHeadingPID(
-                    dt=control_step,
-                    # outer loop (psi -> r)
-                    psi_kp=1, psi_ki=0.2, psi_kd=0.05,
-                    r_ref_lim=0.45,  # saturation for r (rad/s)
-                    r_kp=200, r_ki=250, r_kd=0,
-                    u_lim=max_diff_N/2,  # saturation for control value
-                    r_ref_slew=None,  # slew rate for r (rad/s^2)
-                    u_slew=None,  # slew rate for u
-        )
-        u_controller = PIDAW(
-            kp=150,
-            ki=200,
-            kd=5,
-            dt=control_step,
-            u_min=-max_base_N,
-            u_max=max_base_N,
-        )
+        ax_path.scatter(way_ys, way_xs, marker="x", label="Waypoints", color="black", s=100)
+        ax_path.plot(way_ys, way_xs, "--", color="black", alpha=0.5)
 
-        guider = GuiderClass(waypoints=waypoints, reached_threshold=reached_threshold, **guider_kwargs)
-        xs, ys = test_guider(simulator, thruster, diff_controller, u_controller, guider,
-                    current_state, total_exp_steps, control_every)
+        print(f"\nRunning {scenario_name} scenario...", flush=True)
 
-        ax.plot(ys, xs, label=f"{guider_name}", color=colors[idx], linewidth=2, alpha=0.9)
-        print(f"  {guider_name}: {len(xs)} steps", flush=True)
+        # Test each guider type
+        for idx, (guider_name, GuiderClass, guider_kwargs) in enumerate(guider_types):
+            current_state = np.array([0, 0, -np.pi, 0, 0, 0]).reshape([6, 1])
 
-    # # Example of how to test Adaptive LOS (commented out)
-    # """
-    # print("Testing Adaptive LOS...")
-    # current_state = np.array([0, 0, -np.pi, 0, 0, 0]).reshape([6, 1])
-    # simulator = SimplifiedEnvironmentalDisturbanceSimulator(
-    #     hydro_params=sample_hydro_params_2,
-    #     time_step=time_step,
-    #     env_force_magnitude=env_force_magnitude,
-    #     env_force_direction=env_force_direction,
-    #     model=Fossen,
-    #     init_state=current_state,
-    # )
-    # thruster = NaiveDoubleThruster(b=sample_b_2)
-    # diff_controller = DoubleLoopHeadingPID(
-    #             dt=control_step,
-    #             psi_kp=1, psi_ki=0.2, psi_kd=0.05,
-    #             r_ref_lim=0.45,
-    #             r_kp=200, r_ki=250, r_kd=0,
-    #             u_lim=max_diff_N/2,
-    #             r_ref_slew=None,
-    #             u_slew=None,
-    # )
-    # u_controller = PIDAW(
-    #     kp=150,
-    #     ki=200,
-    #     kd=5,
-    #     dt=control_step,
-    #     u_min=-max_base_N,
-    #     u_max=max_base_N,
-    # )
-    # alos_guider = AdaptiveLOSGuider(
-    #     waypoints=waypoints,
-    #     reached_threshold=reached_threshold,
-    #     nominal_los_dist=nominal_los_dist,
-    #     gamma=0.1,
-    #     kappa=1.0,
-    #     beta_hat0=0.0,
-    #     dt=control_step,
-    #     output_err_flag=False,
-    # )
-    # xs, ys = test_guider(simulator, thruster, diff_controller, u_controller, alos_guider,
-    #                 current_state, total_exp_steps, control_every)
-    # ax.plot(ys, xs, label="Adaptive LOS", color=colors[3], linewidth=2, linestyle=":", alpha=0.9)
-    # """
+            simulator = SimplifiedEnvironmentalDisturbanceSimulator(
+                hydro_params=sample_hydro_params_2,
+                time_step=time_step,
+                env_force_magnitude=env_force_magnitude,
+                env_force_direction=env_force_direction,
+                model=Fossen,
+                init_state=current_state,
+            )
+            thruster = NaiveDoubleThruster(b=sample_b_2)
 
-    ax.set_xlabel("Y position (m)")
-    ax.set_ylabel("X position (m)")
-    ax.set_title(f"LOS Guidance Comparison with Environmental Disturbance\n" +
-                 f"Env force: {env_force_magnitude} N at {env_force_direction/np.pi*180:.0f}°\n" +
-                 f"Waypoints: (0,0) → (100,100)")
-    ax.legend(loc='upper left')
-    ax.grid(True, alpha=0.3)
+            diff_controller = DoubleLoopHeadingPID(
+                        dt=control_step,
+                        psi_kp=1, psi_ki=0.2, psi_kd=0.05,
+                        r_ref_lim=0.45,
+                        r_kp=200, r_ki=250, r_kd=0,
+                        u_lim=max_diff_N/2,
+                        r_ref_slew=None,
+                        u_slew=None,
+            )
+            u_controller = PIDAW(
+                kp=150,
+                ki=200,
+                kd=5,
+                dt=control_step,
+                u_min=-max_base_N,
+                u_max=max_base_N,
+            )
 
+            guider = GuiderClass(waypoints=waypoints, reached_threshold=reached_threshold, **guider_kwargs)
+            result = test_guider(simulator, thruster, diff_controller, u_controller, guider,
+                        current_state, total_exp_steps, control_every)
+
+            # Store results for error plotting
+            all_results[scenario_name][guider_name] = result
+
+            # Plot path
+            ax_path.plot(result['ys'], result['xs'], label=guider_name,
+                        color=colors[idx], linewidth=2, alpha=0.9)
+
+            # Plot cross-track error over time (control steps)
+            t_control = np.arange(0, len(result['y_es'])) * time_step
+            ax_err.plot(t_control, result['y_es'], label=guider_name,
+                       color=colors[idx], linewidth=1.5, alpha=0.8)
+
+            print(f"  {guider_name}: {result['steps']} steps", flush=True)
+
+        # Configure path plot
+        ax_path.set_xlabel("Y position (m)")
+        ax_path.set_ylabel("X position (m)")
+        ax_path.set_title(f"{scenario_name}\nEnv force: {env_force_magnitude} N at {env_force_direction/np.pi*180:.0f}°")
+        ax_path.legend(loc='upper left')
+        ax_path.grid(True, alpha=0.3)
+
+        # Configure error plot
+        ax_err.set_xlabel("Time (s)")
+        ax_err.set_ylabel("Cross-track error y_e (m)")
+        ax_err.set_title(f"{scenario_name} - Cross-track Error")
+        ax_err.legend(loc='upper right')
+        ax_err.grid(True, alpha=0.3)
+        ax_err.set_ylim(-10, 10)  # Consistent y-limits for comparison
+
+    # Adjust layout and display
     plt.tight_layout()
-    # plt.savefig('alos_comparison.png')
-    # print("Plot saved to alos_comparison.png")
-    # plt.close()
     plt.show()
