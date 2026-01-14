@@ -157,7 +157,7 @@ if __name__ == "__main__":
             time_step=time_step,
             model=Fossen,
             init_state=current_state,
-            tau_noise_gen=tau_noise_gen,
+            #tau_noise_gen=tau_noise_gen,
         )
         thruster = NaiveDoubleThruster(b=sample_b_2)
 
@@ -229,8 +229,7 @@ if __name__ == "__main__":
     ax.set_xlabel("Y position (m)")
     ax.set_ylabel("X position (m)")
     ax.set_title(f"LOS Guidance with Environmental Disturbance\n" +
-                 f"Env force: {env_force_magnitude} N at {env_force_direction/np.pi*180:.0f}°, " +
-                 f"Control noise: Gauss-Markov")
+                 f"Env force: {env_force_magnitude} N at {env_force_direction/np.pi*180:.0f}°")
     ax.legend(loc='upper left')
     ax.grid(True, alpha=0.3)
 
