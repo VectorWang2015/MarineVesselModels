@@ -17,7 +17,11 @@ from .pid import PID
 
 class LOSGuider:
     """
+    Naive Line-of-Sight (LOS) guider.
+
+    Guides vessel directly toward the next waypoint without lookahead distance.
     """
+
     def __init__(
             self,
             waypoints: Iterable[Tuple[float, float]],
@@ -25,6 +29,9 @@ class LOSGuider:
             output_err_flag: bool = True,
     ):
         """
+        :param waypoints: List of (x, y) coordinates defining the desired path
+        :param reached_threshold: Distance threshold for considering a waypoint reached (meters)
+        :param output_err_flag: If True, step() returns heading error; if False, returns desired heading
         """
         self.reference_path = waypoints[:]
         self.reached_threshold = reached_threshold
@@ -40,6 +47,13 @@ class LOSGuider:
             cur_pos: Tuple[float, float],
             tgt_pos: Tuple[float, float],
     ) -> float:
+        """
+        Compute desired heading angle to target position.
+
+        :param cur_pos: Current (x, y) position
+        :param tgt_pos: Target (x, y) position
+        :return: Desired heading angle in radians
+        """
         cur_x, cur_y = cur_pos
         tgt_x, tgt_y = tgt_pos
         delta_x = tgt_x - cur_x
@@ -54,6 +68,13 @@ class LOSGuider:
             cur_pos: Tuple[float, float],
             tgt_pos: Tuple[float, float],
     ) -> bool:
+        """
+        Check if current position is within reached_threshold of target.
+
+        :param cur_pos: Current (x, y) position
+        :param tgt_pos: Target (x, y) position
+        :return: True if squared distance <= reached_threshold ** 2
+        """
         cur_pos = np.array(cur_pos)
         tgt_pos = np.array(tgt_pos)
 
@@ -61,6 +82,12 @@ class LOSGuider:
         return distance_sq <= np.power(self.reached_threshold, 2)
 
     def update_waypoint(self):
+        """
+        Advance to next waypoint in reference path.
+
+        Updates former_waypoint and current_waypoint.
+        Called when current waypoint is reached.
+        """
         if self.former_waypoint is None:
             self.former_waypoint = self.cur_pos
         else:
@@ -70,7 +97,9 @@ class LOSGuider:
     @property
     def current_target(self):
         """
-        in naive LOS, the next waypoint is the next target
+        Get current target position.
+
+        :return: Current target (x, y) tuple
         """
         return self.current_waypoint
 
@@ -80,7 +109,11 @@ class LOSGuider:
             cur_psi: float,
     ) -> bool:
         """
-        :return is_ended: True if all waypoints reached, else False
+        Update guider status with current position and heading.
+
+        :param cur_pos: Current (x, y) position
+        :param cur_psi: Current heading angle (radians)
+        :return: True if all waypoints reached, else False
         """
         self.cur_pos = cur_pos
         self.cur_psi = cur_psi
@@ -105,7 +138,10 @@ class LOSGuider:
             desired_psi: float,
     ) -> float:
         """
-        :return psi_err: float within [-pi, pi]
+        Compute heading error normalized to [-π, π].
+
+        :param desired_psi: Desired heading angle (radians)
+        :return: Heading error in radians, normalized to [-π, π]
         """
         psi_err = desired_psi - self.cur_psi
         psi_err = (psi_err + np.pi) % (2*np.pi) - np.pi
@@ -117,7 +153,13 @@ class LOSGuider:
             cur_psi: float,
     ) -> Tuple[bool, float]:
         """
-        returns: is_ended, psi_err
+        Compute guidance output for current state.
+
+        :param cur_pos: Current (x, y) position
+        :param cur_psi: Current heading angle (radians)
+        :return: Tuple (is_ended, psi_err/desired_psi) where:
+                 is_ended = True if all waypoints reached,
+                 psi_err/desired_psi = heading error if output_err_flag True else desired heading
         """
         has_ended = self.update_cur_status(cur_pos, cur_psi)
         if has_ended:
@@ -137,6 +179,10 @@ class LOSGuider:
 
 class FixedDistLOSGuider(LOSGuider):
     """
+    Fixed lookahead distance LOS guider.
+
+    Guides vessel toward a point on the path segment that is a fixed lookahead
+    distance ahead of the vessel's perpendicular projection onto the segment.
     """
     def __init__(
             self,
@@ -155,9 +201,15 @@ class FixedDistLOSGuider(LOSGuider):
             self,
     ):
         """
-        return a target point
-        segment should be a line from the desired trajectory, a tuple of start and end point
-        should be guided to start or end point if each pt on the desired path is beyond the guide distance
+        Calculate the LOS target point based on fixed lookahead distance.
+
+        The target point is computed as:
+        1. Project current position onto the current path segment
+        2. If distance from projection >= los_dist, target is the projection point
+        3. If distance < los_dist, target is a point los_dist ahead along the segment
+        4. If target would be beyond segment endpoints, clamp to nearest endpoint
+
+        :return: Target point as numpy array (x, y)
         """
         guide_line_dist = self.los_dist
         line_pt1 = np.array(self.former_waypoint)
@@ -199,16 +251,25 @@ class FixedDistLOSGuider(LOSGuider):
     @property
     def current_target(self):
         """
-        in fixed LOS, current target is:
-            * such is the perpendicular point from cur_pos to the current way line (if dist >= los_dist)
-            * current (next) way point (if way point within los_dist)
-            * a point that is on the way line, and is los_dist from cur_pos (otherwise)
+        Get current target position for fixed LOS guider.
+
+        The target depends on vessel's distance from the path:
+        - If perpendicular distance >= los_dist: target is perpendicular projection point
+        - If waypoint within los_dist: target is the next waypoint
+        - Otherwise: target is a point los_dist ahead along the segment
+
+        :return: Current target position (x, y)
         """
         return self.calc_los_target()
 
 
 class DynamicDistLOSGuider(FixedDistLOSGuider):
     """
+    Dynamic lookahead distance LOS guider.
+
+    Guides vessel toward a point on the path segment that is a fixed forward
+    distance ahead of the vessel's perpendicular projection onto the segment,
+    regardless of cross-track error.
     """
 
     def __init__(
@@ -233,8 +294,13 @@ class DynamicDistLOSGuider(FixedDistLOSGuider):
             self,
     ):
         """
-        return a target point
-        guider logic see: <Path following control system for a tanker ship model>
+        Calculate the LOS target point based on fixed forward distance.
+
+        The target point is computed as a point forward_dist ahead along the path
+        segment from the vessel's perpendicular projection onto the segment.
+        If target would be beyond segment endpoints, clamp to nearest endpoint.
+
+        :return: Target point as numpy array (x, y)
         """
         remaining_length = self.forward_dist
         line_pt1 = np.array(self.former_waypoint)
@@ -247,13 +313,11 @@ class DynamicDistLOSGuider(FixedDistLOSGuider):
 
         proportion = np.dot(line_pt2-line_pt1, current_pos-line_pt1) / l2
         perpendicular_pt = proportion * (line_pt2 - line_pt1) + line_pt1
-        #dist = np.linalg.norm(perpendicular_pt-current_pos)
-
-        #breakpoint()
-        #remaining_length = np.sqrt(guide_line_dist**2 - dist**2)
         remaining_vec = remaining_length * line_vec
+
         target_pt = perpendicular_pt + remaining_vec
         target_pt_proportion = np.dot(target_pt - line_pt1, line_vec) / np.sqrt(l2)
+
         if target_pt_proportion <= 0:
             return line_pt1
         elif target_pt_proportion >= 1:
@@ -267,12 +331,6 @@ class AdaptiveLOSGuider(DynamicDistLOSGuider):
     Adaptive LOS (ALOS) guider with sideslip compensation.
 
     Based on Fossen 2023: ψ_d = π_h - β_hat - atan(y_e/Δ)
-
-    Algorithm:
-    1. Compute path-tangential angle π_h = atan2(y_{i+1} - y_i, x_{i+1} - x_i)
-    2. Compute signed cross-track error y_e in path-tangential frame
-    3. Desired heading: ψ_d = π_h - β_hat - atan(y_e/Δ)
-    4. Sideslip adaptation: β_hat_dot = γ·(Δ·y_e)/√(Δ² + y_e²)
     """
 
     def __init__(
@@ -282,7 +340,20 @@ class AdaptiveLOSGuider(DynamicDistLOSGuider):
             output_err_flag=True,
             reset_beta_on_segment_change=False
     ):
-        super().__init__(waypoints, reached_threshold, forward_dist, output_err_flag)
+        """
+        Initialize Adaptive LOS guider with sideslip compensation.
+
+        :param waypoints: List of (x, y) coordinates defining the desired path
+        :param reached_threshold: Distance threshold for considering a waypoint reached (meters)
+        :param forward_dist: Lookahead distance Δ (meters)
+        :param dt: Time step for sideslip adaptation (seconds)
+        :param gamma: Adaptation gain γ
+        :param beta_hat0: Initial sideslip estimate β̂₀ (radians)
+        :param output_err_flag: If True, step() returns heading error; if False, returns desired heading
+        :param reset_beta_on_segment_change: If True, reset β̂ to β̂₀ on segment transitions
+        """
+        super().__init__(
+                waypoints, reached_threshold, forward_dist, output_err_flag)
         assert forward_dist > 0, "forward_dist must be positive"
         self.gamma = gamma
         self.beta_hat0 = beta_hat0
@@ -296,7 +367,11 @@ class AdaptiveLOSGuider(DynamicDistLOSGuider):
             cur_psi: float,
     ) -> bool:
         """
-        :return is_ended: True if all waypoints reached, else False
+        Update guider status with current position and heading.
+
+        :param cur_pos: Current (x, y) position
+        :param cur_psi: Current heading angle (radians)
+        :return: True if all waypoints reached, else False
         """
         return super().update_cur_status(cur_pos, cur_psi)
 
@@ -308,9 +383,7 @@ class AdaptiveLOSGuider(DynamicDistLOSGuider):
 
         π_h = atan2(y_{i+1} - y_i, x_{i+1} - x_i)
 
-        Returns:
-        --------
-        float : π_h in radians, normalized to [0, 2π)
+        :return: Path-tangential angle π_h in radians, normalized to [0, 2π)
         """
         line_pt1 = self.former_waypoint
         line_pt2 = self.current_waypoint
@@ -322,12 +395,9 @@ class AdaptiveLOSGuider(DynamicDistLOSGuider):
         """
         Compute signed cross-track error y_e in path-tangential frame.
 
-        y_e = (p × s) / ‖s‖ where p = position vector, s = segment vector
-        Positive y_e indicates port side deviation.
+        Positive y_e indicates starboard side deviation.
 
-        Returns:
-        --------
-        float : y_e in meters
+        :return: Cross-track error y_e in meters (positive = port side)
         """
         line_pt1 = self.former_waypoint
         #line_pt2 = self.current_waypoint
@@ -348,16 +418,10 @@ class AdaptiveLOSGuider(DynamicDistLOSGuider):
 
         ψ_d = π_h - β_hat - atan(y_e/Δ)
 
-        Parameters:
-        -----------
-        cur_pos : Tuple[float, float]
-            Current position (x, y)
-        tgt_pos : Tuple[float, float], optional
-            Target position (ignored in ALOS)
-
-        Returns:
-        --------
-        float : Desired heading ψ_d in radians
+        :param cur_pos: Current position (x, y)
+        :param tgt_pos: Target position (ignored in ALOS),
+                left only for consistence
+        :return: Desired heading ψ_d in radians
         """
         D = self.forward_dist
 
@@ -386,16 +450,9 @@ class AdaptiveLOSGuider(DynamicDistLOSGuider):
         """
         Override step method for ALOS adaptation.
 
-        Parameters:
-        -----------
-        cur_pos : Tuple[float, float]
-            Current position (x, y)
-        cur_psi : float
-            Current heading (rad)
-
-        Returns:
-        --------
-        Tuple[bool, float] : (is_ended, psi_err/desired_psi)
+        :param cur_pos: Current position (x, y)
+        :param cur_psi: Current heading (rad)
+        :return: Tuple (is_ended, psi_err/desired_psi)
         """
         has_ended = self.update_cur_status(cur_pos, cur_psi)
         if has_ended:
