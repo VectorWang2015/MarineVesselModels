@@ -3,8 +3,8 @@
 # license: MIT
 
 r"""
- _           
-| | ___  ___ 
+ _
+| | ___  ___
 | |/ _ \/ __|
 | | (_) \__ \
 |_|\___/|___/
@@ -12,7 +12,7 @@ r"""
 """
 import numpy as np
 
-from typing import Tuple, Iterable
+from typing import Tuple, Iterable, Optional
 from .pid import PID
 
 class LOSGuider:
@@ -33,6 +33,7 @@ class LOSGuider:
         self.former_waypoint = None
         self.current_waypoint = None
         self.cur_pos = None
+        self.cur_psi = None
 
     def calc_desired_direction(
             self,
@@ -73,6 +74,43 @@ class LOSGuider:
         """
         return self.current_waypoint
 
+    def update_cur_status(
+            self,
+            cur_pos: Tuple[float, float],
+            cur_psi: float,
+    ) -> bool:
+        """
+        :return is_ended: True if all waypoints reached, else False
+        """
+        self.cur_pos = cur_pos
+        self.cur_psi = cur_psi
+
+        # init waypoint if first time step is called
+        if self.current_waypoint is None:
+            self.update_waypoint()
+
+        # find
+        while self.has_reached(self.cur_pos, self.current_waypoint):
+            del (self.reference_path[0])
+            if len(self.reference_path) == 0:
+                # if all waypoints reached, return True
+                return True
+            else:
+                # else set/check next waypoint
+                self.update_waypoint()
+        return False
+
+    def calc_psi_err(
+            self,
+            desired_psi: float,
+    ) -> float:
+        """
+        :return psi_err: float within [-pi, pi]
+        """
+        psi_err = desired_psi - self.cur_psi
+        psi_err = (psi_err + np.pi) % (2*np.pi) - np.pi
+        return psi_err
+
     def step(
             self,
             cur_pos: Tuple[float, float],
@@ -81,31 +119,17 @@ class LOSGuider:
         """
         returns: is_ended, psi_err
         """
-        self.cur_pos = cur_pos
-
-        # init waypoint if first time step is called
-        if self.current_waypoint is None:
-            self.update_waypoint()
-
-        # find 
-        while self.has_reached(self.cur_pos, self.current_waypoint):
-            del(self.reference_path[0])
-            if len(self.reference_path) == 0:
-                # if all waypoints reached, return True
-                if self.output_err_flag:
-                    return (True, 0)
-                else:
-                    return (True, None)
+        has_ended = self.update_cur_status(cur_pos, cur_psi)
+        if has_ended:
+            if self.output_err_flag:
+                return (True, 0)
             else:
-                # else set/check next waypoint
-                self.update_waypoint()
-        
+                return (True, None)
+
         desired_psi = self.calc_desired_direction(cur_pos, self.current_target)
 
         if self.output_err_flag:
-            psi_err = desired_psi - cur_psi
-            psi_err %= 2*np.pi
-            psi_err = psi_err - 2*np.pi if psi_err > np.pi else psi_err
+            psi_err = self.calc_psi_err(desired_psi)
             return False, psi_err
         else:
             return False, desired_psi
@@ -141,7 +165,7 @@ class FixedDistLOSGuider(LOSGuider):
         current_pos = self.cur_pos
 
         l2 = np.sum((line_pt2-line_pt1)**2)
-    
+
         line_vec = (line_pt2 - line_pt1) / np.sqrt(l2)
 
         proportion = np.dot(line_pt2-line_pt1, current_pos-line_pt1) / l2
@@ -182,47 +206,11 @@ class FixedDistLOSGuider(LOSGuider):
         """
         return self.calc_los_target()
 
-    def step(
-            self,
-            cur_pos: Tuple[float, float],
-            cur_psi: float,
-    ) -> Tuple[bool, float]:
-        """
-        returns: is_ended, psi_err
-        """
-        self.cur_pos = cur_pos
-
-        # init waypoint if first time step is called
-        if self.current_waypoint is None:
-            self.update_waypoint()
-
-        # find 
-        while self.has_reached(self.cur_pos, self.current_waypoint):
-            del(self.reference_path[0])
-            if len(self.reference_path) == 0:
-                # if all waypoints reached, return True
-                if self.output_err_flag:
-                    return (True, 0)
-                else:
-                    return (True, None)
-            else:
-                # else set/check next waypoint
-                self.update_waypoint()
-        
-        desired_psi = self.calc_desired_direction(cur_pos, self.current_target)
-
-        if self.output_err_flag:
-            psi_err = desired_psi - cur_psi
-            psi_err %= 2*np.pi
-            psi_err = psi_err - 2*np.pi if psi_err > np.pi else psi_err
-            return False, psi_err
-        else:
-            return False, desired_psi
-
 
 class DynamicDistLOSGuider(FixedDistLOSGuider):
     """
     """
+
     def __init__(
             self,
             waypoints: Iterable[Tuple[float, float]],
@@ -254,7 +242,7 @@ class DynamicDistLOSGuider(FixedDistLOSGuider):
         current_pos = self.cur_pos
 
         l2 = np.sum((line_pt2-line_pt1)**2)
-    
+
         line_vec = (line_pt2 - line_pt1) / np.sqrt(l2)
 
         proportion = np.dot(line_pt2-line_pt1, current_pos-line_pt1) / l2
@@ -272,3 +260,154 @@ class DynamicDistLOSGuider(FixedDistLOSGuider):
             return line_pt2
         else:
             return target_pt
+
+
+class AdaptiveLOSGuider(DynamicDistLOSGuider):
+    """
+    Adaptive LOS (ALOS) guider with sideslip compensation.
+
+    Based on Fossen 2023: ψ_d = π_h - β_hat - atan(y_e/Δ)
+
+    Algorithm:
+    1. Compute path-tangential angle π_h = atan2(y_{i+1} - y_i, x_{i+1} - x_i)
+    2. Compute signed cross-track error y_e in path-tangential frame
+    3. Desired heading: ψ_d = π_h - β_hat - atan(y_e/Δ)
+    4. Sideslip adaptation: β_hat_dot = γ·(Δ·y_e)/√(Δ² + y_e²)
+    """
+
+    def __init__(
+            self, waypoints, reached_threshold, forward_dist,
+            dt,
+            gamma=0.0006, beta_hat0=0.0,
+            output_err_flag=True,
+            reset_beta_on_segment_change=False
+    ):
+        super().__init__(waypoints, reached_threshold, forward_dist, output_err_flag)
+        assert forward_dist > 0, "forward_dist must be positive"
+        self.gamma = gamma
+        self.beta_hat0 = beta_hat0
+        self.beta_hat = beta_hat0
+        self.dt = dt
+        self.reset_beta_on_segment_change = reset_beta_on_segment_change
+
+    def update_cur_status(
+            self,
+            cur_pos: Tuple[float, float],
+            cur_psi: float,
+    ) -> bool:
+        """
+        :return is_ended: True if all waypoints reached, else False
+        """
+        return super().update_cur_status(cur_pos, cur_psi)
+
+    def calc_pi_h(self):
+        """
+        Compute path-tangential angle π_h for current segment.
+
+        !!! Should be called after waypoints updated
+
+        π_h = atan2(y_{i+1} - y_i, x_{i+1} - x_i)
+
+        Returns:
+        --------
+        float : π_h in radians, normalized to [0, 2π)
+        """
+        line_pt1 = self.former_waypoint
+        line_pt2 = self.current_waypoint
+        delta_x = line_pt2[0] - line_pt1[0]
+        delta_y = line_pt2[1] - line_pt1[1]
+        return np.arctan2(delta_y, delta_x)
+
+    def calc_cross_track_error(self):
+        """
+        Compute signed cross-track error y_e in path-tangential frame.
+
+        y_e = (p × s) / ‖s‖ where p = position vector, s = segment vector
+        Positive y_e indicates port side deviation.
+
+        Returns:
+        --------
+        float : y_e in meters
+        """
+        line_pt1 = self.former_waypoint
+        #line_pt2 = self.current_waypoint
+        pos = self.cur_pos
+        pi_h = self.calc_pi_h()
+
+        dx = pos[0] - line_pt1[0]
+        dy = pos[1] - line_pt1[1]
+        cross_track_err = -np.sin(pi_h)*dx + np.cos(pi_h)*dy
+
+        return cross_track_err
+
+    def calc_desired_direction(self, cur_pos, tgt_pos=None):
+        """
+        Override to compute ALOS desired heading.
+
+        !!! Needs to be called after pos/waypoints updated.
+
+        ψ_d = π_h - β_hat - atan(y_e/Δ)
+
+        Parameters:
+        -----------
+        cur_pos : Tuple[float, float]
+            Current position (x, y)
+        tgt_pos : Tuple[float, float], optional
+            Target position (ignored in ALOS)
+
+        Returns:
+        --------
+        float : Desired heading ψ_d in radians
+        """
+        D = self.forward_dist
+
+        pi_h = self.calc_pi_h()
+        y_e = self.calc_cross_track_error()
+        dot_beta = self.gamma * D * y_e / \
+                np.sqrt(D**2 + y_e**2)
+        self.beta_hat += dot_beta * self.dt
+
+        return pi_h - self.beta_hat - np.arctan(y_e / D)
+
+    def update_waypoint(self):
+        """
+        Override to reset beta_hat on segment transitions if enabled.
+        """
+        prev_waypoint = self.current_waypoint
+        super().update_waypoint()
+        if self.reset_beta_on_segment_change and prev_waypoint is not None:
+            self.beta_hat = self.beta_hat0
+
+    @property
+    def current_target(self):
+        raise Exception("ALOS calculation is not based on a hypo target.")
+
+    def step(self, cur_pos, cur_psi):
+        """
+        Override step method for ALOS adaptation.
+
+        Parameters:
+        -----------
+        cur_pos : Tuple[float, float]
+            Current position (x, y)
+        cur_psi : float
+            Current heading (rad)
+
+        Returns:
+        --------
+        Tuple[bool, float] : (is_ended, psi_err/desired_psi)
+        """
+        has_ended = self.update_cur_status(cur_pos, cur_psi)
+        if has_ended:
+            if self.output_err_flag:
+                return (True, 0)
+            else:
+                return (True, None)
+
+        desired_psi = self.calc_desired_direction(cur_pos)
+
+        if self.output_err_flag:
+            psi_err = self.calc_psi_err(desired_psi)
+            return False, psi_err
+        else:
+            return False, desired_psi
