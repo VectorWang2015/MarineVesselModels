@@ -397,7 +397,7 @@ class AdaptiveLOSGuider(DynamicDistLOSGuider):
 
         Positive y_e indicates starboard side deviation.
 
-        :return: Cross-track error y_e in meters (positive = port side)
+        :return: Cross-track error y_e in meters (positive = starboard side)
         """
         line_pt1 = self.former_waypoint
         #line_pt2 = self.current_waypoint
