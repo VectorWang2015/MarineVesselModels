@@ -35,7 +35,8 @@ def compute_cross_track_error(guider):
 
 
 def test_guider(simulator, thruster, diff_controller, u_controller, guider,
-                current_state, total_exp_steps, control_every):
+                current_state, total_exp_steps, control_every, time_step,
+                pose_draw_interval=None):
     """
     Run guidance simulation and collect results.
 
@@ -59,8 +60,16 @@ def test_guider(simulator, thruster, diff_controller, u_controller, guider,
     us = []
     vs = []
     rs = []
+    vel_dirs = []  # velocity direction χ = atan2(v, u) in NED coordinates
     y_es = []  # cross-track errors
     is_ended = False
+
+    # Pose drawing setup
+    pose_draw_indices = []
+    if pose_draw_interval is not None and pose_draw_interval > 0:
+        pose_draw_every_steps = int(pose_draw_interval / time_step)
+    else:
+        pose_draw_every_steps = None
 
     # Initialize control variables (will be set on first control step)
     psi_err = 0.0
@@ -106,6 +115,24 @@ def test_guider(simulator, thruster, diff_controller, u_controller, guider,
         vs.append(current_v)
         rs.append(current_r)
 
+        # Calculate velocity direction χ = ψ + β in NED coordinates, where β = atan2(v, u) is sideslip
+        if abs(current_u) < 1e-6 and abs(current_v) < 1e-6:
+            vel_dir = current_psi  # If no velocity, use heading
+        else:
+            # Sideslip angle β = atan2(v, u) in body-fixed frame
+            beta = np.arctan2(current_v, current_u)
+            # Normalize heading to [-π, π] before adding
+            psi_norm = ((current_psi + np.pi) % (2*np.pi)) - np.pi
+            # Velocity direction in NED: χ = ψ + β
+            vel_dir = psi_norm + beta
+            # Normalize to [-π, π]
+            vel_dir = ((vel_dir + np.pi) % (2*np.pi)) - np.pi
+        vel_dirs.append(vel_dir)
+
+        # Record pose drawing indices at specified interval
+        if pose_draw_every_steps is not None and t % pose_draw_every_steps == 0:
+            pose_draw_indices.append(t)
+
         # apply tau and step
         current_state = simulator.step(tau)
 
@@ -113,13 +140,18 @@ def test_guider(simulator, thruster, diff_controller, u_controller, guider,
         'xs': xs, 'ys': ys, 'steps': len(xs),
         'y_es': y_es, 'ts': ts,
         'psis': psis, 'psi_errs': psi_errs,
-        'us': us, 'vs': vs, 'rs': rs
+        'us': us, 'vs': vs, 'rs': rs,
+        'vel_dirs': vel_dirs,
+        'pose_draw_indices': pose_draw_indices
     }
 
 
 if __name__ == "__main__":
+    import os
+    TEST_MODE = os.environ.get('TEST_MODE', '0') == '1'
+
     time_step = 0.1
-    total_exp_steps = 10000
+    total_exp_steps = 100 if TEST_MODE else 10000
     control_step = 0.2
     control_every = int(control_step / time_step)
 
@@ -130,6 +162,12 @@ if __name__ == "__main__":
     reached_threshold = 5.0  # Larger threshold for long distance
     forward_dist = 5.0
     nominal_los_dist = 5.0  # For Fixed LOS
+
+    # Ship pose drawing parameters (for ALOS visualization)
+    pose_draw_interval = 5.0  # seconds between pose drawings
+    ship_radius = 0.5  # meters (ship length scale)
+    heading_line_length = 0.75  # meters
+    velocity_line_length = 0.75  # meters
 
     # Environmental disturbance parameters
     env_force_magnitude = 16.0  # Newtons
@@ -165,10 +203,6 @@ if __name__ == "__main__":
     # Colors for different guiders
     colors = plt.get_cmap('tab10')(np.linspace(0, 1, len(guider_types)))
 
-    # Initialize 2x2 plot grid
-    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
-    ax_path1, ax_path2, ax_err1, ax_err2 = axes.flatten()
-
     # Store results for error plots
     all_results = {scenario['name']: {} for scenario in scenarios}
 
@@ -177,13 +211,9 @@ if __name__ == "__main__":
         waypoints = scenario['waypoints']
         scenario_name = scenario['name']
 
-        # Determine which axes to use
-        if scenario_idx == 0:
-            ax_path = ax_path1
-            ax_err = ax_err1
-        else:
-            ax_path = ax_path2
-            ax_err = ax_err2
+        # Create separate figure for each scenario (2x1 layout)
+        fig, axes = plt.subplots(2, 1, figsize=(12, 10))
+        ax_path, ax_err = axes.flatten()
 
         # Plot waypoints
         way_xs = [pt[0] for pt in waypoints]
@@ -244,8 +274,14 @@ if __name__ == "__main__":
             )
 
             guider = GuiderClass(waypoints=waypoints, reached_threshold=reached_threshold, **guider_kwargs)
+            # Draw poses for Adaptive LOS and Dynamic LOS in both scenarios
+            if (guider_name == 'Adaptive LOS' or guider_name == 'Dynamic LOS'):
+                current_pose_draw_interval = pose_draw_interval
+            else:
+                current_pose_draw_interval = None
             result = test_guider(simulator, thruster, diff_controller, u_controller, guider,
-                        current_state, total_exp_steps, control_every)
+                        current_state, total_exp_steps, control_every, time_step,
+                        pose_draw_interval=current_pose_draw_interval)
 
             # Store results for error plotting
             all_results[scenario_name][guider_name] = result
@@ -253,6 +289,36 @@ if __name__ == "__main__":
             # Plot path
             ax_path.plot(result['ys'], result['xs'], label=guider_name,
                         color=colors[idx], linewidth=2, alpha=0.9)
+
+            # Draw ship poses for Adaptive LOS and Dynamic LOS in both scenarios
+            if (guider_name == 'Adaptive LOS' or guider_name == 'Dynamic LOS') and 'pose_draw_indices' in result:
+                # Create modified color for pose (darker version of trajectory color)
+                traj_color = colors[idx]  # RGBA array
+                # Darken RGB components, keep alpha
+                pose_color = traj_color * np.array([0.6, 0.6, 0.6, 1.0])
+                for idx_draw in result['pose_draw_indices']:
+                    i = idx_draw  # index in arrays
+                    pos = (result['xs'][i], result['ys'][i])  # NED coordinates (x_north, y_east)
+                    heading_deg = result['psis'][i]
+                    # Convert to radians and normalize to [-π, π]
+                    heading_ned = ((heading_deg * np.pi / 180 + np.pi) % (2*np.pi)) - np.pi
+                    vel_dir_ned = result['vel_dirs'][i]
+                    
+                    # Draw ship pose with specified dimensions (velocity line disabled)
+                    plot_utils.draw_ship_pose_ned(
+                        ax=ax_path,
+                        pos=pos,
+                        heading_ned=heading_ned,
+                        vel_dir_ned=vel_dir_ned,
+                        radius=ship_radius,
+                        head_len=heading_line_length,
+                        vel_len=velocity_line_length,
+                        head_color=pose_color,
+                        vel_color="r",
+                        lw=1.5,
+                        zorder=20,
+                        draw_vel_line=False
+                    )
 
             # Plot cross-track error over time (control steps)
             t_control = np.arange(0, len(result['y_es'])) * time_step
@@ -276,6 +342,8 @@ if __name__ == "__main__":
         ax_err.grid(True, alpha=0.3)
         ax_err.set_ylim(-10, 10)  # Consistent y-limits for comparison
 
-    # Adjust layout and display
-    plt.tight_layout()
+        # Adjust layout for this figure
+        plt.tight_layout()
+
+    # Display all figures
     plt.show()
