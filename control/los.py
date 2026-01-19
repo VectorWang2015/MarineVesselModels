@@ -486,7 +486,7 @@ class EnhancedAdaptiveLOSGuider(AdaptiveLOSGuider):
             gamma=0.0006, beta_hat0=0.0,
             beta_max=np.deg2rad(30.0),
             psi_err_threshold=np.deg2rad(15.0),
-            alpha=0.5,
+            alpha=0.0,
             output_err_flag=True,
     ):
         """
@@ -501,6 +501,7 @@ class EnhancedAdaptiveLOSGuider(AdaptiveLOSGuider):
         :param beta_max: Maximum allowed sideslip estimate magnitude (radians)
         :param psi_err_threshold: Heading error threshold for conditional integration (radians)
         :param alpha: Partial reset factor (0.0 = hard reset, 1.0 = no reset)
+                Default hard reset (tuned through ablation in constant disturbance)
         :param output_err_flag: If True, step() returns heading error; if False, returns desired heading
         """
         super().__init__(
