@@ -4,11 +4,59 @@ from matplotlib import pyplot as plt
 from MarineVesselModels.simulator import VesselSimulator
 from MarineVesselModels.KT import FirstOrderResponse, sample_hydro_params, NoisyFirstOrderResponse
 from identification.least_square_methods import LeastSquareFirstOrderNonLinearResponse, RecursiveLeastSquareFirstOrderNonLinearResponse
-from demos.kt_zigzag import kt_zigzag
+def kt_zigzag(
+        simulator,
+        current_state,
+        zigzag_degrees: float,
+        sample_delta: float,
+        sample_u: float,
+):
+    init_psi = 0
+    zigzag_psi = zigzag_degrees / 180 * np.pi
+    current_state = current_state.copy()
+    
+    # turn right
+    tgt_psi = init_psi + zigzag_psi
+    tau = np.array([sample_delta]).reshape([1, 1])
+    states = None
+    
+    while current_state[2][0] < tgt_psi:
+        current_state_with_tau = np.vstack((current_state, tau))
+        if states is not None:
+            states = np.hstack((states, current_state_with_tau))
+        else:
+            states = current_state_with_tau.copy()
+    
+        current_state = simulator.step(tau)
+    
+    # turn left
+    tgt_psi = init_psi - zigzag_psi
+    tau = np.array([-sample_delta]).reshape([1, 1])
+    
+    while current_state[2][0] > tgt_psi:
+        current_state_with_tau = np.vstack((current_state, tau))
+        states = np.hstack((states, current_state_with_tau))
+    
+        current_state = simulator.step(tau)
+    
+    # turn right
+    tgt_psi = init_psi + zigzag_psi
+    tau = np.array([sample_delta]).reshape([1, 1])
+    
+    while current_state[2][0] < tgt_psi:
+        current_state_with_tau = np.vstack((current_state, tau))
+        states = np.hstack((states, current_state_with_tau))
+    
+        current_state = simulator.step(tau)
+    
+    current_state_with_tau = np.vstack((current_state, tau))
+    states = np.hstack((states, current_state_with_tau))
+
+    return states
 
 
 if __name__ == "__main__":
-    train_data = np.load("./demos/KT_noisy_zigzag_25_5_0.01.npy")
+    train_data = np.load("./exp_data/KT_noisy_zigzag_25_5_0.01.npy")
     time_step = 0.01
     # train_data before this index, will be treated as init data
     # after this index, will be treated update data, which will be used for recursive update

@@ -8,8 +8,6 @@ from MarineVesselModels.thrusters import NaiveDoubleThruster
 from identification.least_square_methods import LeastSquareFossen, LeastSquareFossenSG
 from identification.improved_ls import WeightedRidgeLSFossen
 from identification.PRBS import generate_dualthruster_prbs
-from demos.fossen_zigzag import fossen_zigzag
-from demos.fossen_PRBS import fossen_prbs
 
 from pickle import load
 

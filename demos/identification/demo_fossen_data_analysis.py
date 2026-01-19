@@ -3,8 +3,8 @@ from scipy.signal import savgol_filter
 from matplotlib import pyplot as plt
 
 
-state_data = np.load("./demos/Fossen_PRBS_0.1_900.npy")
-partial_data = np.load("./demos/partial_Fossen_PRBS_0.1_900.npy")
+state_data = np.load("./exp_data/Fossen_PRBS_0.1_900.npy")
+partial_data = np.load("./exp_data/partial_Fossen_PRBS_0.1_900.npy")
 
 partial_u = partial_data[3]
 partial_v = partial_data[4]
