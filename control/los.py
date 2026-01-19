@@ -468,3 +468,101 @@ class AdaptiveLOSGuider(DynamicDistLOSGuider):
             return False, psi_err
         else:
             return False, desired_psi
+
+
+class EnhancedAdaptiveLOSGuider(AdaptiveLOSGuider):
+    """
+    Enhanced Adaptive LOS (EALOS) guider with improved sideslip adaptation.
+
+    Extends AdaptiveLOSGuider with:
+    1. β̂ clamping to [-β_max, +β_max] for physical realism
+    2. Conditional integration: adapt only when |ψ_err| ≤ threshold
+    3. Partial reset on segment changes: β̂ = α·β̂ + (1-α)·β̂₀
+    """
+
+    def __init__(
+            self, waypoints, reached_threshold, forward_dist,
+            dt,
+            gamma=0.0006, beta_hat0=0.0,
+            beta_max=np.deg2rad(30.0),
+            psi_err_threshold=np.deg2rad(15.0),
+            alpha=0.5,
+            output_err_flag=True,
+    ):
+        """
+        Initialize Enhanced Adaptive LOS guider.
+
+        :param waypoints: List of (x, y) coordinates defining the desired path
+        :param reached_threshold: Distance threshold for considering a waypoint reached (meters)
+        :param forward_dist: Lookahead distance Δ (meters)
+        :param dt: Time step for sideslip adaptation (seconds)
+        :param gamma: Adaptation gain γ
+        :param beta_hat0: Initial sideslip estimate β̂₀ (radians)
+        :param beta_max: Maximum allowed sideslip estimate magnitude (radians)
+        :param psi_err_threshold: Heading error threshold for conditional integration (radians)
+        :param alpha: Partial reset factor (0.0 = hard reset, 1.0 = no reset)
+        :param output_err_flag: If True, step() returns heading error; if False, returns desired heading
+        """
+        super().__init__(
+                waypoints, reached_threshold, forward_dist,
+                dt, gamma, beta_hat0,
+                output_err_flag=output_err_flag,
+                reset_beta_on_segment_change=False  # Override parent's reset mechanism
+        )
+        self.beta_max = beta_max
+        self.psi_err_threshold = psi_err_threshold
+        self.alpha = alpha
+        # Clamp initial beta_hat to [-beta_max, beta_max]
+        self.beta_hat = np.clip(self.beta_hat, -self.beta_max, self.beta_max)
+
+    def calc_desired_direction(self, cur_pos, tgt_pos=None):
+        """
+        Override to compute enhanced ALOS desired heading with improved adaptation.
+
+        ψ_d = π_h - β_hat - atan(y_e/Δ)
+
+        Adaptation features:
+        1. Conditional integration based on heading error
+        2. β̂ clamping to [-β_max, +β_max]
+        3. Uses same adaptation law as parent
+
+        :param cur_pos: Current position (x, y)
+        :param tgt_pos: Target position (ignored in ALOS),
+                left only for consistency
+        :return: Desired heading ψ_d in radians
+        """
+        D = self.forward_dist
+
+        pi_h = self.calc_pi_h()
+        y_e = self.calc_cross_track_error()
+
+        dot_beta = self.gamma * D * y_e / np.sqrt(D**2 + y_e**2)
+
+        # Compute desired heading candidate (using current β̂)
+        desired_psi_candidate = pi_h - self.beta_hat - np.arctan(y_e / D)
+
+        # Check heading error threshold for conditional integration
+        psi_err = self.calc_psi_err(desired_psi_candidate)
+        if abs(psi_err) <= self.psi_err_threshold:
+            # Apply adaptation
+            self.beta_hat += dot_beta * self.dt
+
+            # Apply saturation clamp
+            self.beta_hat = np.clip(self.beta_hat, -self.beta_max, self.beta_max)
+
+        # Return final desired heading (with possibly updated β̂)
+        return pi_h - self.beta_hat - np.arctan(y_e / D)
+
+    def update_waypoint(self):
+        """
+        Override to apply partial reset on segment transitions.
+
+        Partial reset: β̂ = α·β̂ + (1-α)·β̂₀
+        """
+        prev_waypoint = self.current_waypoint
+        super().update_waypoint()
+        if prev_waypoint is not None:
+            # Apply partial reset: β̂ = α·β̂ + (1-α)·β̂₀
+            self.beta_hat = self.alpha * self.beta_hat + (1 - self.alpha) * self.beta_hat0
+            # Clamp after partial reset
+            self.beta_hat = np.clip(self.beta_hat, -self.beta_max, self.beta_max)
