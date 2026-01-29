@@ -427,11 +427,16 @@ class AdaptiveLOSGuider(DynamicDistLOSGuider):
 
         pi_h = self.calc_pi_h()
         y_e = self.calc_cross_track_error()
+
+        # use old estimate to generate control target,
+        # to avoid estimation-control co-coupling
+        desired_direction = pi_h - self.beta_hat - np.arctan(y_e / D)
+        # update new estimation
         dot_beta = self.gamma * D * y_e / \
                 np.sqrt(D**2 + y_e**2)
         self.beta_hat += dot_beta * self.dt
 
-        return pi_h - self.beta_hat - np.arctan(y_e / D)
+        return desired_direction
 
     def update_waypoint(self):
         """
