@@ -482,13 +482,14 @@ class EnhancedAdaptiveLOSGuider(AdaptiveLOSGuider):
     Extends AdaptiveLOSGuider with:
     1. β̂ clamping to [-β_max, +β_max] for physical realism
     2. Conditional integration: adapt only when |ψ_err| ≤ threshold
-    3. Partial reset on segment changes: β̂ = α·β̂ + (1-α)·β̂₀
+    3. Leakage term: σ·(β̂ - β̂₀) pulls estimate towards initial value
+    4. Partial reset on segment changes: β̂ = α·β̂ + (1-α)·β̂₀
     """
 
     def __init__(
             self, waypoints, reached_threshold, forward_dist,
             dt,
-            gamma=0.0006, beta_hat0=0.0,
+            gamma=0.0006, sigma=0.0, beta_hat0=0.0,
             beta_max=np.deg2rad(30.0),
             psi_err_threshold=np.deg2rad(15.0),
             alpha=0.0,
@@ -502,6 +503,7 @@ class EnhancedAdaptiveLOSGuider(AdaptiveLOSGuider):
         :param forward_dist: Lookahead distance Δ (meters)
         :param dt: Time step for sideslip adaptation (seconds)
         :param gamma: Adaptation gain γ
+        :param sigma: Leakage gain σ for sideslip estimate (default 0.0)
         :param beta_hat0: Initial sideslip estimate β̂₀ (radians)
         :param beta_max: Maximum allowed sideslip estimate magnitude (radians)
         :param psi_err_threshold: Heading error threshold for conditional integration (radians)
@@ -515,6 +517,8 @@ class EnhancedAdaptiveLOSGuider(AdaptiveLOSGuider):
                 output_err_flag=output_err_flag,
                 reset_beta_on_segment_change=False  # Override parent's reset mechanism
         )
+        assert sigma >= 0.0, "sigma must be non-negative"
+        self.sigma = sigma
         self.beta_max = beta_max
         self.psi_err_threshold = psi_err_threshold
         self.alpha = alpha
@@ -527,10 +531,14 @@ class EnhancedAdaptiveLOSGuider(AdaptiveLOSGuider):
 
         ψ_d = π_h - β_hat - atan(y_e/Δ)
 
+        Adaptation law:
+        dot_β̂ = γ·Δ·y_e/√(Δ² + y_e²) - σ·(β̂ - β̂₀)
+
         Adaptation features:
         1. Conditional integration based on heading error
         2. β̂ clamping to [-β_max, +β_max]
-        3. Uses same adaptation law as parent
+        3. Leakage term with gain σ pulls estimate towards β̂₀
+        4. Partial reset on segment transitions
 
         :param cur_pos: Current position (x, y)
         :param tgt_pos: Target position (ignored in ALOS),
@@ -538,26 +546,31 @@ class EnhancedAdaptiveLOSGuider(AdaptiveLOSGuider):
         :return: Desired heading ψ_d in radians
         """
         D = self.forward_dist
-
         pi_h = self.calc_pi_h()
         y_e = self.calc_cross_track_error()
 
-        dot_beta = self.gamma * D * y_e / np.sqrt(D**2 + y_e**2)
+        # 1) Use OLD estimate to generate control target (avoid estimation-control co-coupling)
+        desired_direction = pi_h - self.beta_hat - np.arctan(y_e / D)
 
-        # Compute desired heading candidate (using current β̂)
-        desired_psi_candidate = pi_h - self.beta_hat - np.arctan(y_e / D)
+        # 2) Decide whether learning term is enabled (conditional integration)
+        psi_err = self.calc_psi_err(desired_direction)
+        learn_on = abs(psi_err) <= self.psi_err_threshold
 
-        # Check heading error threshold for conditional integration
-        psi_err = self.calc_psi_err(desired_psi_candidate)
-        if abs(psi_err) <= self.psi_err_threshold:
-            # Apply adaptation
-            self.beta_hat += dot_beta * self.dt
+        # 3) Compute learning term (gated) and leakage term (always on)
+        learning_term = 0.0
+        if learn_on:
+            learning_term = self.gamma * D * y_e / np.sqrt(D**2 + y_e**2)
 
-            # Apply saturation clamp
-            self.beta_hat = np.clip(self.beta_hat, -self.beta_max, self.beta_max)
+        leakage_term = self.sigma * (self.beta_hat - self.beta_hat0)
 
-        # Return final desired heading (with possibly updated β̂)
-        return pi_h - self.beta_hat - np.arctan(y_e / D)
+        # 4) Update beta_hat for NEXT step
+        dot_beta = learning_term - leakage_term
+        self.beta_hat += dot_beta * self.dt
+
+        # 5) Clamp beta_hat after update
+        self.beta_hat = np.clip(self.beta_hat, -self.beta_max, self.beta_max)
+
+        return desired_direction
 
     def update_waypoint(self):
         """
