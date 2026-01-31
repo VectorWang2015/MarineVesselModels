@@ -99,6 +99,72 @@ class Fossen():
         u1, u2, r, psi = v[0][0], v[1][0], v[2][0], state[2][0]
 
         dot_v = np.linalg.inv(self.M) @ (tau - self.C(state)@v - self.D@v)
+        # ground coords is related to heading and speed
+        dot_x = np.array([
+            np.cos(psi)*u1 - np.sin(psi)*u2,
+            np.sin(psi)*u1 + np.cos(psi)*u2,
+            r,
+        ]).reshape([3, 1])
+
+        return np.vstack((dot_x, dot_v))
+
+
+class FossenWithCurrent(Fossen):
+    """
+    Linear Fossen that considers current influence
+    utilizing current velocity in damping term
+
+    ATTENTION: the influence of waves and winds is supposed to reflect in taus
+    """
+    def relative_velo(
+            self,
+            u: float,
+            v: float,
+            psi: float,
+            current_dir: float,
+            current_velo: float,
+    ) -> Tuple[float, float]:
+        """
+        calculates relative speed for own vessel concerning current
+        
+        :param current_dir: direction of the incoming current [rad]
+        :param current_velo: ||velocity|| of the current [m/s]
+        :param u:
+        :param v:
+        :param psi:
+
+        :return relative_velocity:
+            u_r, v_r, each represents relative velocity components in {b}
+        """
+        relative_dir = current_dir - psi
+        # current u, v in {b}
+        u_c = current_velo * np.cos(relative_dir)
+        v_c = current_velo * np.sin(relative_dir)
+
+        return u-u_c, v-v_c
+
+    def partial_state(
+            self,
+            state: np.array,
+            tau: np.array,
+            current_dir: float=0,
+            current_velo: float=0,
+
+    ):
+        """
+        :param current_dir: direction of the incoming current in {n} [rad]
+        :param current_velo: ||velocity|| of the current in {n} [m/s]
+        """
+        #x = state[:3,:]
+        v = state[3:, :]
+        u1, u2, r, psi = v[0][0], v[1][0], v[2][0], state[2][0]
+
+        # calculate relative velo in {b} considering current
+        u_r, v_r = self.relative_velo(u=u1, v=u2, psi=psi,
+                    current_dir=current_dir, current_velo=current_velo)
+        relative_v = np.array([u_r, v_r, r]).reshape([3, 1])
+
+        dot_v = np.linalg.inv(self.M) @ (tau - self.C(state)@v - self.D@relative_v)
 
         # ground coords is related to heading and speed
         dot_x = np.array([

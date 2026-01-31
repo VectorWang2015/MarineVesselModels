@@ -83,6 +83,7 @@ def time_invariant_simulator_runge_kutta(
         state,
         tau,
         h,
+        fn_kwargs=None,
 ):
     """
     assumes that input remains the same in the time step
@@ -93,14 +94,23 @@ def time_invariant_simulator_runge_kutta(
             returns partial of the state
         state: current_state
         h: time step size in [seconds]
+        fn_kwargs: dict containing all other params to be passed to fn_p_state
     returns:
         predicted state after time h
     """
     # find a better slope
-    k1 = fn_p_state(state, tau)
-    k2 = fn_p_state(state+h/2*k1, tau)
-    k3 = fn_p_state(state+h/2*k2, tau)
-    k4 = fn_p_state(state+h*k3, tau)
+    if fn_kwargs is not None:
+        k1 = fn_p_state(state, tau, **fn_kwargs)
+        k2 = fn_p_state(state+h/2*k1, tau, **fn_kwargs)
+        k3 = fn_p_state(state+h/2*k2, tau, **fn_kwargs)
+        k4 = fn_p_state(state+h*k3, tau, **fn_kwargs)
+    # for history version compatibility, handles None case seperately, usually with Fossen
+    else:
+        k1 = fn_p_state(state, tau)
+        k2 = fn_p_state(state+h/2*k1, tau)
+        k3 = fn_p_state(state+h/2*k2, tau)
+        k4 = fn_p_state(state+h*k3, tau)
+
     k = (k1 + 2*k2 + 2*k3 + k4)/6
 
     return state+k*h

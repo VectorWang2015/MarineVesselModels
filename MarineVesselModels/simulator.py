@@ -1,5 +1,5 @@
 import numpy as np
-from .Fossen import Fossen
+from .Fossen import Fossen, FossenWithCurrent
 from .stepper import time_invariant_simulator_runge_kutta
 from .noises import GaussianNoiseGenerator, GaussMarkovNoiseGenerator
 
@@ -138,34 +138,28 @@ class NoisyVesselSimulator(VesselSimulator):
 
 class SimplifiedEnvironmentalDisturbanceSimulator(VesselSimulator):
     """
-    Simulator with constant directional environmental forces (wind/wave).
-    
-    Adds a constant force in global coordinates to the control inputs.
-    The force is converted to body frame based on current vessel heading.
-    Simplified model: force only, no yaw moment from environment.
-    
-    Parameters
-    ----------
-    env_force_magnitude : float
-        Magnitude of environmental force in Newtons.
-    env_force_direction : float
-        Direction of environmental force in radians (global coordinates).
-        0 = east, pi/2 = north (standard math coordinates).
+    TODO:
+        this class should be refactoried to use env force generator and current generator,
+        so that it can utilize dynamic environmental disturbance
     """
     def __init__(
             self,
             hydro_params,
             time_step: float,
-            env_force_magnitude: float,
-            env_force_direction: float,  # radians, global coordinates (0 = east, pi/2 = north)
-            model = Fossen,
+            model = FossenWithCurrent,
             init_state: np.array = np.array([0,0,0,0,0,0]).reshape([6,1]),
             step_fn = time_invariant_simulator_runge_kutta,
             output_partial = False,
+            env_force_magnitude: float=0,
+            env_force_direction: float=0,  # radians
+            current_velocity: float=0,  # [m/s]
+            current_direction: float=0, # [rad]
     ):
         super().__init__(hydro_params, time_step, model, init_state, step_fn, output_partial)
         self.env_force_magnitude = env_force_magnitude
         self.env_force_direction = env_force_direction
+        self.current_velocity = current_velocity
+        self.current_direction = current_direction
         
         # Pre-compute global force vector (no moment component for now)
         self.env_force_global = np.array([
@@ -204,13 +198,31 @@ class SimplifiedEnvironmentalDisturbanceSimulator(VesselSimulator):
         total_tau = tau + env_force_body
         self.applied_taus.append(total_tau)
         
-        new_state = self.step_fn(
-            fn_p_state=self.model.partial_state,
-            state=self.state,
-            tau=total_tau,
-            h=self.t,
-        )
-        partial = self.model.partial_state(self.state, total_tau)
+        # passing current information to model
+        if self.current_velocity != 0:
+            current_information = {
+                "current_dir": self.current_direction,
+                "current_velo": self.current_velocity,
+            }
+    
+            new_state = self.step_fn(
+                fn_p_state=self.model.partial_state,
+                state=self.state,
+                tau=total_tau,
+                h=self.t,
+                fn_kwargs=current_information,
+            )
+            partial = self.model.partial_state(self.state, total_tau, **current_information)
+        # for history demo compatibility
+        else:
+            new_state = self.step_fn(
+                fn_p_state=self.model.partial_state,
+                state=self.state,
+                tau=total_tau,
+                h=self.t,
+            )
+            partial = self.model.partial_state(self.state, total_tau)
+
         self.state = new_state
         
         self.states.append(self.state)
