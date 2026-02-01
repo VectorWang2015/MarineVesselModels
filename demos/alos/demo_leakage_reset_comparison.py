@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-Compare reset mechanisms and leakage in Enhanced Adaptive LOS across multiple disturbance conditions.
+Compare reset mechanisms and leakage in Enhanced Adaptive LOS across multiple current conditions.
 
 Tests:
 - Reset mechanisms without leakage: hard reset (alpha=0.0), soft reset (alpha=0.5)
-- Leakage with no reset: no reset (alpha=1.0) with sigma = 0.0, 0.001, 0.005, 0.01, 0.1
-- Single scenario: Zigzag path with varying environmental disturbances
-- Disturbance conditions: 12 combinations (3 strengths × 4 angles)
+- Leakage with no reset: no reset (alpha=1.0) with sigma = 0.0, 0.1, 0.01, 0.005, 0.003, 0.001
+- Single scenario: Zigzag path with varying ocean current directions
+- Current conditions: 7 directions at 0.1, 0.2, 0.3, 0.4 m/s (28 total conditions)
+- Parallel execution: Uses multiprocessing with up to 12 processes for faster simulation
 
 Outputs:
-- Average RMSE across all disturbance conditions for each configuration
+- Average RMSE across all current conditions for each configuration
 - Performance statistics (std dev, min, max)
 - Summary table of aggregated performance
+- Representative plot for 0.4 m/s at 45° current condition
 """
 import sys
 import os
@@ -20,10 +22,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import numpy as np
 from matplotlib import pyplot as plt
 import plot_utils
+import multiprocessing as mp
+from functools import partial
 
 from MarineVesselModels.simulator import NoisyVesselSimulator, SimplifiedEnvironmentalDisturbanceSimulator
 from MarineVesselModels.thrusters import NaiveDoubleThruster
-from MarineVesselModels.Fossen import sample_b_2, sample_hydro_params_2, sample_thrust_2, Fossen
+from MarineVesselModels.Fossen import sample_b_2, sample_hydro_params_2, sample_thrust_2, Fossen, FossenWithCurrent
 from MarineVesselModels.noises import GaussMarkovNoiseGenerator
 
 from control.pid import DoubleLoopHeadingPID, PIDAW
@@ -208,7 +212,7 @@ def create_guider_configs():
     Configurations:
     - Hard reset (α=0.0) without leakage (σ=0.0)
     - Soft reset (α=0.5) without leakage (σ=0.0)
-    - No reset (α=1.0) with various leakage levels (σ=0.0, 0.001, 0.005, 0.01, 0.1)
+    - No reset (α=1.0) with various leakage levels (σ=0.0, 0.1, 0.01, 0.005, 0.003, 0.001)
     """
     configs = []
 
@@ -234,7 +238,7 @@ def create_guider_configs():
     configs.append(("α=0.5 (soft), σ=0.000", config))
 
     # No reset with various leakage levels
-    sigmas = [0.0, 0.001, 0.003, 0.005, 0.007, 0.01, 0.1]
+    sigmas = [0.0, 0.1, 0.01, 0.005, 0.003, 0.001]
     for sigma in sigmas:
         name = f"α=1.0 (no reset), σ={sigma:.3f}"
         config = base_params.copy()
@@ -244,7 +248,7 @@ def create_guider_configs():
     return configs
 
 
-def run_scenario(scenario_name, waypoints, env_force_magnitude, env_force_direction, configs,
+def run_scenario(scenario_name, waypoints, current_velocity, current_direction, configs,
                  time_step, total_exp_steps, control_step, desire_u):
     """
     Run a single scenario with all guider configurations.
@@ -255,21 +259,23 @@ def run_scenario(scenario_name, waypoints, env_force_magnitude, env_force_direct
 
     # Common simulation setup for this scenario
     hydro_params = sample_hydro_params_2
-    model = Fossen
+    model = FossenWithCurrent
     init_state = np.array([0, 0, 0, 0, 0, 0]).reshape([6, 1])
 
-    # Environmental disturbance direction passed as parameter
+    # Current direction passed as parameter
 
     for config_name, config in configs:
         print(f"  Running {config_name}...")
 
-        # Create simulator with environmental disturbance
+        # Create simulator with ocean current (no environmental force)
         simulator = SimplifiedEnvironmentalDisturbanceSimulator(
             hydro_params=hydro_params,
             time_step=time_step,
-            env_force_magnitude=env_force_magnitude,
-            env_force_direction=env_force_direction,
             model=model,
+            env_force_magnitude=0,
+            env_force_direction=0,
+            current_velocity=current_velocity,
+            current_direction=current_direction,
         )
         simulator.state = init_state.copy()
 
@@ -318,12 +324,12 @@ def run_scenario(scenario_name, waypoints, env_force_magnitude, env_force_direct
     return results
 
 
-def plot_results(scenario_name, waypoints, results, output_prefix, env_force_direction, time_step):
+def plot_results(scenario_name, waypoints, results, output_prefix, current_direction, time_step):
     """
     Create plots for a scenario.
 
     Creates:
-    1. Trajectory plot with waypoints and disturbance arrows
+    1. Trajectory plot with waypoints and current direction arrows
     2. Cross-track error over time
     3. Sideslip estimate (beta_hat) over time
 
@@ -352,10 +358,10 @@ def plot_results(scenario_name, waypoints, results, output_prefix, env_force_dir
         ys = result['ys']  # Y positions (East)
         ax.plot(ys, xs, color=colors[idx], alpha=0.7, linewidth=1.5, label=config_name)
 
-    # Add environmental force direction arrows (background)
+    # Add current direction arrows (background)
     plot_utils.add_force_direction_arrows(
         ax=ax,
-        direction_angle=env_force_direction,
+        direction_angle=current_direction,
         spacing=10.0,
     )
 
@@ -430,12 +436,12 @@ def plot_results(scenario_name, waypoints, results, output_prefix, env_force_dir
 
 def compute_average_metrics(condition_results):
     """
-    Compute average metrics across multiple disturbance conditions.
+    Compute average metrics across multiple current conditions.
 
     Args:
         condition_results: List of dictionaries, each containing:
-            - 'strength': disturbance force magnitude (N)
-            - 'angle': disturbance direction (radians)
+            - 'velocity': current velocity magnitude (m/s)
+            - 'angle': current direction (radians)
             - 'results': dictionary mapping config_name to result dict
 
     Returns:
@@ -451,7 +457,7 @@ def compute_average_metrics(condition_results):
                     'rmse_values': [],
                     'mae_values': [],
                     'mean_err_values': [],
-                    'strengths': [],
+                    'velocities': [],
                     'angles': [],
                     'condition_results': []  # store individual condition results
                 }
@@ -463,10 +469,10 @@ def compute_average_metrics(condition_results):
             aggregated[config_name]['rmse_values'].append(rmse)
             aggregated[config_name]['mae_values'].append(mae)
             aggregated[config_name]['mean_err_values'].append(mean_err)
-            aggregated[config_name]['strengths'].append(condition['strength'])
+            aggregated[config_name]['velocities'].append(condition['velocity'])
             aggregated[config_name]['angles'].append(condition['angle'])
             aggregated[config_name]['condition_results'].append({
-                'strength': condition['strength'],
+                'velocity': condition['velocity'],
                 'angle': condition['angle'],
                 'rmse': rmse,
                 'mae': mae,
@@ -513,9 +519,9 @@ def compute_average_metrics(condition_results):
 
 
 def print_averaged_metrics_table(aggregated_metrics):
-    """Print table of averaged metrics across all disturbance conditions."""
+    """Print table of averaged metrics across all current conditions."""
     print("\n" + "="*120)
-    print("AVERAGED PERFORMANCE METRICS ACROSS ALL DISTURBANCE CONDITIONS")
+    print("AVERAGED PERFORMANCE METRICS ACROSS ALL CURRENT CONDITIONS")
     print("="*120)
 
     # Find baseline (hard reset with σ=0.000)
@@ -556,45 +562,83 @@ def print_averaged_metrics_table(aggregated_metrics):
         print("Note: Mean Error positive = average bias to port side, negative = average bias to starboard side")
 
 
-def run_multiple_conditions(waypoints, disturbance_conditions, configs,
-                            time_step, total_exp_steps, control_step, desire_u):
+def _run_single_condition(args):
     """
-    Run simulations across multiple disturbance conditions.
+    Helper function to run a single condition for multiprocessing.
+    
+    Args:
+        args: Tuple containing (index, velocity, angle_deg, waypoints, configs, 
+                               time_step, total_exp_steps, control_step, desire_u)
+    
+    Returns:
+        Dictionary with condition results
+    """
+    i, velocity, angle_deg, waypoints, configs, time_step, total_exp_steps, control_step, desire_u = args
+    angle_rad = np.deg2rad(angle_deg)
+    print(f"  Condition {i+1}: {velocity} m/s at {angle_deg}°")
+    
+    results = run_scenario(
+        scenario_name=f"Zigzag ({velocity} m/s, {angle_deg}°)",
+        waypoints=waypoints,
+        current_velocity=velocity,
+        current_direction=angle_rad,
+        configs=configs,
+        time_step=time_step,
+        total_exp_steps=total_exp_steps,
+        control_step=control_step,
+        desire_u=desire_u,
+    )
+    
+    return {
+        'velocity': velocity,
+        'angle': angle_rad,
+        'angle_deg': angle_deg,
+        'results': results
+    }
+
+
+def run_multiple_conditions(waypoints, current_conditions, configs,
+                            time_step, total_exp_steps, control_step, desire_u,
+                            max_procs=12):
+    """
+    Run simulations across multiple current conditions using multiprocessing.
 
     Args:
         waypoints: List of (x, y) waypoints for the zigzag path
-        disturbance_conditions: List of (strength, angle) tuples
+        current_conditions: List of (velocity_mps, angle_degrees) tuples
         configs: List of (name, config_dict) guider configurations
         time_step, total_exp_steps, control_step, desire_u: Simulation parameters
+        max_procs: Maximum number of parallel processes (default: 12)
 
     Returns:
         List of condition results dictionaries
     """
     condition_results = []
-
-    for i, (strength, angle_deg) in enumerate(disturbance_conditions):
-        angle_rad = np.deg2rad(angle_deg)
-        print(f"\nCondition {i+1}/{len(disturbance_conditions)}: {strength}N at {angle_deg}°")
-
-        results = run_scenario(
-            scenario_name=f"Zigzag ({strength}N, {angle_deg}°)",
-            waypoints=waypoints,
-            env_force_magnitude=strength,
-            env_force_direction=angle_rad,
-            configs=configs,
-            time_step=time_step,
-            total_exp_steps=total_exp_steps,
-            control_step=control_step,
-            desire_u=desire_u,
-        )
-
-        condition_results.append({
-            'strength': strength,
-            'angle': angle_rad,
-            'angle_deg': angle_deg,
-            'results': results
-        })
-
+    
+    # Prepare arguments for multiprocessing
+    args_list = []
+    for i, (velocity, angle_deg) in enumerate(current_conditions):
+        args_list.append((
+            i, velocity, angle_deg, waypoints, configs,
+            time_step, total_exp_steps, control_step, desire_u
+        ))
+    
+    # Determine number of processes to use
+    n_conditions = len(current_conditions)
+    n_procs = min(max_procs, n_conditions, mp.cpu_count())
+    
+    if n_procs > 1:
+        print(f"Running {n_conditions} conditions using {n_procs} parallel processes...")
+        with mp.Pool(processes=n_procs) as pool:
+            condition_results = list(pool.imap(_run_single_condition, args_list))
+    else:
+        print(f"Running {n_conditions} conditions sequentially...")
+        for args in args_list:
+            condition_results.append(_run_single_condition(args))
+    
+    # Sort by original order (though imap should preserve order)
+    condition_results.sort(key=lambda x: current_conditions.index((x['velocity'], x['angle_deg'])))
+    
     return condition_results
 
 
@@ -610,50 +654,35 @@ if __name__ == "__main__":
     control_step = 0.2
     desire_u = 0.5  # desired surge velocity (m/s)
 
-    # Define disturbance conditions (3 strengths × 4 angles = 12 conditions)
-    disturbance_conditions = [
-        # Format: (strength_N, angle_degrees)
-        (16.0, 0.0),   # 16N at 0° (North)
-        (16.0, 30.0),  # 16N at 30°
-        (16.0, 60.0),  # 16N at 60°
-        (16.0, 90.0),  # 16N at 90° (East)
-
-        (32.0, 0.0),   # 32N at 0°
-        (32.0, 30.0),  # 32N at 30°
-        (32.0, 60.0),  # 32N at 60°
-        (32.0, 90.0),  # 32N at 90°
-
-        (64.0, 0.0),   # 64N at 0°
-        (64.0, 30.0),  # 64N at 30°
-        (64.0, 60.0),  # 64N at 60°
-        (64.0, 90.0),  # 64N at 90°
-
-        (96.0, 0.0),   # 96N at 0°
-        (96.0, 30.0),  # 96N at 30°
-        (96.0, 60.0),  # 96N at 60°
-        (96.0, 90.0),  # 96N at 90°
-    ]
+    # Define current conditions (4 velocities × 7 angles = 28 conditions)
+    current_conditions = []
+    velocities = [0.1, 0.2, 0.3, 0.4]
+    angles = [-135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0]
+    for velocity in velocities:
+        for angle in angles:
+            current_conditions.append((velocity, angle))
 
     # Zigzag path waypoints
     zigzag_waypoints = [(0, 0), (100, 100), (0, 200), (100, 300), (0, 400)]
 
     # Create guider configurations
     configs = create_guider_configs()
-    print(f"Testing {len(configs)} configurations across {len(disturbance_conditions)} disturbance conditions:")
+    print(f"Testing {len(configs)} configurations across {len(current_conditions)} current conditions:")
     for name, _ in configs:
         print(f"  - {name}")
 
-    # Run simulations across all disturbance conditions
-    print(f"\nTotal simulations: {len(configs)} configs × {len(disturbance_conditions)} conditions = {len(configs) * len(disturbance_conditions)}")
+    # Run simulations across all current conditions
+    print(f"\nTotal simulations: {len(configs)} configs × {len(current_conditions)} conditions = {len(configs) * len(current_conditions)}")
 
     condition_results = run_multiple_conditions(
         waypoints=zigzag_waypoints,
-        disturbance_conditions=disturbance_conditions,
+        current_conditions=current_conditions,
         configs=configs,
         time_step=time_step,
         total_exp_steps=total_exp_steps,
         control_step=control_step,
         desire_u=desire_u,
+        max_procs=12,
     )
 
     # Compute aggregated metrics
@@ -662,17 +691,34 @@ if __name__ == "__main__":
     # Print averaged metrics table
     print_averaged_metrics_table(aggregated_metrics)
 
-    # Optional: Generate plots for the first condition as representative
+    # Optional: Generate plots for a representative condition (0.4 m/s at 45° current)
     if condition_results and not TEST_MODE:
-        first_condition = condition_results[0]
-        print(f"\nGenerating representative plots for condition: {first_condition['strength']}N at {first_condition['angle_deg']}°")
+        # Find a condition with 0.4 m/s current velocity at 45° direction
+        representative_condition = None
+        for condition in condition_results:
+            if condition['velocity'] == 0.4 and condition['angle_deg'] == 45.0:
+                representative_condition = condition
+                break
+        
+        # If no 0.4 m/s at 45° condition found, look for any 0.4 m/s condition
+        if representative_condition is None:
+            for condition in condition_results:
+                if condition['velocity'] == 0.4:
+                    representative_condition = condition
+                    break
+        
+        # If still no 0.4 m/s condition found, use the first one
+        if representative_condition is None:
+            representative_condition = condition_results[0]
+
+        print(f"\nGenerating representative plots for condition: {representative_condition['velocity']} m/s at {representative_condition['angle_deg']}°")
 
         plot_results(
-            scenario_name=f"Zigzag Path ({first_condition['strength']}N, {first_condition['angle_deg']}°)",
+            scenario_name=f"Zigzag Path ({representative_condition['velocity']} m/s, {representative_condition['angle_deg']}°)",
             waypoints=zigzag_waypoints,
-            results=first_condition['results'],
+            results=representative_condition['results'],
             output_prefix='leakage_reset_comparison',
-            env_force_direction=first_condition['angle'],
+            current_direction=representative_condition['angle'],
             time_step=time_step
         )
 
