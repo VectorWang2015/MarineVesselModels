@@ -152,6 +152,7 @@ class SimplifiedEnvironmentalDisturbanceSimulator(VesselSimulator):
             output_partial = False,
             env_force_magnitude: float=0,
             env_force_direction: float=0,  # radians
+            l_eff: float=0, # effective N_d arm for OV (side)
             current_velocity: float=0,  # [m/s]
             current_direction: float=0, # [rad]
     ):
@@ -160,14 +161,15 @@ class SimplifiedEnvironmentalDisturbanceSimulator(VesselSimulator):
         self.env_force_direction = env_force_direction
         self.current_velocity = current_velocity
         self.current_direction = current_direction
-        
+        self.l_eff = l_eff
+
         # Pre-compute global force vector (no moment component for now)
         self.env_force_global = np.array([
             env_force_magnitude * np.cos(env_force_direction),
             env_force_magnitude * np.sin(env_force_direction),
-            0.0  # No environmental yaw moment in simplified model
+            0.0     # to be computed considering OV psi
         ]).reshape([3, 1])
-        
+
         self.env_forces_body = []  # Store environmental forces in body frame for analysis
         self.applied_taus = []     # Store total tau (control + environmental) applied to model
 
@@ -176,10 +178,10 @@ class SimplifiedEnvironmentalDisturbanceSimulator(VesselSimulator):
             tau,
     ):
         self.raw_taus.append(tau)
-        
+
         # Get current heading
         psi = self.state[2][0]
-        
+
         # Convert global environmental force to body frame
         # Rotation matrix from body to global: R(psi) = [[cos(psi), -sin(psi)], [sin(psi), cos(psi)]]
         # So global vector v_global = R(psi) @ v_body => v_body = R(psi)^T @ v_global
@@ -190,21 +192,23 @@ class SimplifiedEnvironmentalDisturbanceSimulator(VesselSimulator):
             [-sin_psi, cos_psi, 0],
             [0, 0, 1]
         ])
-        
+
         env_force_body = R_T @ self.env_force_global
+        # update: N = l_eff * Y_d
+        env_force_body[2][0] = env_force_body[1][0] * self.l_eff
         self.env_forces_body.append(env_force_body)
-        
+
         # Combine control input with environmental disturbance
         total_tau = tau + env_force_body
         self.applied_taus.append(total_tau)
-        
+
         # passing current information to model
         if self.current_velocity != 0:
             current_information = {
                 "current_dir": self.current_direction,
                 "current_velo": self.current_velocity,
             }
-    
+
             new_state = self.step_fn(
                 fn_p_state=self.model.partial_state,
                 state=self.state,
@@ -224,10 +228,10 @@ class SimplifiedEnvironmentalDisturbanceSimulator(VesselSimulator):
             partial = self.model.partial_state(self.state, total_tau)
 
         self.state = new_state
-        
+
         self.states.append(self.state)
         self.partials.append(partial)
-        
+
         # if debug mode, outputs partial of the state as well
         if self.output_partial:
             return self.state, partial
