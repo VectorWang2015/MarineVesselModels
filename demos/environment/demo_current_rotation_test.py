@@ -26,7 +26,16 @@ though simulated drift will be less than theoretical due to acceleration time.
 """
 
 
-def run_rotation_test(current_direction, current_velocity, control_tau, time_step, total_steps):
+def run_rotation_test(
+        current_direction,
+        current_velocity,
+        force_direction,
+        force_magnitude,
+        l_eff,
+        control_tau,
+        time_step,
+        total_steps
+):
     """
     Run rotation simulation with given current parameters.
 
@@ -37,8 +46,9 @@ def run_rotation_test(current_direction, current_velocity, control_tau, time_ste
         hydro_params=sample_hydro_params_2,
         time_step=time_step,
         model=FossenWithCurrent,
-        env_force_magnitude=0,  # No environmental force, only current
-        env_force_direction=0,
+        env_force_magnitude=force_magnitude,  # No environmental force, only current
+        env_force_direction=force_direction,
+        l_eff=l_eff,
         current_velocity=current_velocity,
         current_direction=current_direction,
     )
@@ -143,6 +153,8 @@ if __name__ == "__main__":
 
     # Current settings
     current_velocity = 0.1  # m/s
+    force_magnitude = 5  # N
+    l_eff = 0.1 # m
     current_directions = [0.0, np.pi/4, np.pi/2]  # 0°, 45°, 90° in NED coordinates
     direction_labels = ["0° (North)", "45° (NE)", "90° (East)"]
 
@@ -169,6 +181,9 @@ if __name__ == "__main__":
     baseline_xs, baseline_ys = run_rotation_test(
         current_direction=0,
         current_velocity=0,
+        force_direction=0,
+        force_magnitude=0,
+        l_eff=l_eff,
         control_tau=control_tau_1,
         time_step=time_step,
         total_steps=total_steps,
@@ -183,6 +198,9 @@ if __name__ == "__main__":
         xs1, ys1 = run_rotation_test(
             current_direction=direction,
             current_velocity=current_velocity,
+            force_direction=direction,
+            force_magnitude=force_magnitude,
+            l_eff=l_eff,
             control_tau=control_tau_1,
             time_step=time_step,
             total_steps=total_steps,
@@ -193,6 +211,9 @@ if __name__ == "__main__":
         xs2, ys2 = run_rotation_test(
             current_direction=direction,
             current_velocity=current_velocity,
+            force_direction=direction,
+            force_magnitude=force_magnitude,
+            l_eff=l_eff,
             control_tau=control_tau_2,
             time_step=time_step,
             total_steps=total_steps,
@@ -203,6 +224,9 @@ if __name__ == "__main__":
         xs3, ys3 = run_rotation_test(
             current_direction=direction,
             current_velocity=current_velocity,
+            force_direction=direction,
+            force_magnitude=force_magnitude,
+            l_eff=l_eff,
             control_tau=control_tau_3,
             time_step=time_step,
             total_steps=total_steps,
