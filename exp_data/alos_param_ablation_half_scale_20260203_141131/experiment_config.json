@@ -1,0 +1,304 @@
+{
+  "waypoints": [
+    [
+      0,
+      0
+    ],
+    [
+      50,
+      50
+    ],
+    [
+      0,
+      100
+    ],
+    [
+      50,
+      150
+    ],
+    [
+      0,
+      200
+    ]
+  ],
+  "time_step": 0.01,
+  "control_step": 20,
+  "desire_u": 0.5,
+  "total_exp_steps": 300000,
+  "parameter_grid": [
+    {
+      "reset_mode": "hard_reset",
+      "alpha": 0.0,
+      "soft_reset_coeff": 0.0,
+      "leakage": 0.0,
+      "sigma": 0.0
+    },
+    {
+      "reset_mode": "hard_reset",
+      "alpha": 0.0,
+      "soft_reset_coeff": 0.0,
+      "leakage": 0.1,
+      "sigma": 0.1
+    },
+    {
+      "reset_mode": "hard_reset",
+      "alpha": 0.0,
+      "soft_reset_coeff": 0.0,
+      "leakage": 0.01,
+      "sigma": 0.01
+    },
+    {
+      "reset_mode": "hard_reset",
+      "alpha": 0.0,
+      "soft_reset_coeff": 0.0,
+      "leakage": 0.005,
+      "sigma": 0.005
+    },
+    {
+      "reset_mode": "hard_reset",
+      "alpha": 0.0,
+      "soft_reset_coeff": 0.0,
+      "leakage": 0.003,
+      "sigma": 0.003
+    },
+    {
+      "reset_mode": "hard_reset",
+      "alpha": 0.0,
+      "soft_reset_coeff": 0.0,
+      "leakage": 0.001,
+      "sigma": 0.001
+    },
+    {
+      "reset_mode": "soft_reset",
+      "alpha": 0.5,
+      "soft_reset_coeff": 0.5,
+      "leakage": 0.0,
+      "sigma": 0.0
+    },
+    {
+      "reset_mode": "soft_reset",
+      "alpha": 0.5,
+      "soft_reset_coeff": 0.5,
+      "leakage": 0.1,
+      "sigma": 0.1
+    },
+    {
+      "reset_mode": "soft_reset",
+      "alpha": 0.5,
+      "soft_reset_coeff": 0.5,
+      "leakage": 0.01,
+      "sigma": 0.01
+    },
+    {
+      "reset_mode": "soft_reset",
+      "alpha": 0.5,
+      "soft_reset_coeff": 0.5,
+      "leakage": 0.005,
+      "sigma": 0.005
+    },
+    {
+      "reset_mode": "soft_reset",
+      "alpha": 0.5,
+      "soft_reset_coeff": 0.5,
+      "leakage": 0.003,
+      "sigma": 0.003
+    },
+    {
+      "reset_mode": "soft_reset",
+      "alpha": 0.5,
+      "soft_reset_coeff": 0.5,
+      "leakage": 0.001,
+      "sigma": 0.001
+    },
+    {
+      "reset_mode": "no_reset",
+      "alpha": 1.0,
+      "soft_reset_coeff": 1.0,
+      "leakage": 0.0,
+      "sigma": 0.0
+    },
+    {
+      "reset_mode": "no_reset",
+      "alpha": 1.0,
+      "soft_reset_coeff": 1.0,
+      "leakage": 0.1,
+      "sigma": 0.1
+    },
+    {
+      "reset_mode": "no_reset",
+      "alpha": 1.0,
+      "soft_reset_coeff": 1.0,
+      "leakage": 0.01,
+      "sigma": 0.01
+    },
+    {
+      "reset_mode": "no_reset",
+      "alpha": 1.0,
+      "soft_reset_coeff": 1.0,
+      "leakage": 0.005,
+      "sigma": 0.005
+    },
+    {
+      "reset_mode": "no_reset",
+      "alpha": 1.0,
+      "soft_reset_coeff": 1.0,
+      "leakage": 0.003,
+      "sigma": 0.003
+    },
+    {
+      "reset_mode": "no_reset",
+      "alpha": 1.0,
+      "soft_reset_coeff": 1.0,
+      "leakage": 0.001,
+      "sigma": 0.001
+    }
+  ],
+  "environment_grid": [
+    {
+      "current_speed": 0.1,
+      "direction_deg": 0,
+      "force_magnitude": 5.0,
+      "direction_rad": 0.0
+    },
+    {
+      "current_speed": 0.1,
+      "direction_deg": 30,
+      "force_magnitude": 5.0,
+      "direction_rad": 0.5235987755982988
+    },
+    {
+      "current_speed": 0.1,
+      "direction_deg": 90,
+      "force_magnitude": 5.0,
+      "direction_rad": 1.5707963267948966
+    },
+    {
+      "current_speed": 0.1,
+      "direction_deg": 150,
+      "force_magnitude": 5.0,
+      "direction_rad": 2.6179938779914944
+    },
+    {
+      "current_speed": 0.1,
+      "direction_deg": 180,
+      "force_magnitude": 5.0,
+      "direction_rad": 3.141592653589793
+    },
+    {
+      "current_speed": 0.1,
+      "direction_deg": 270,
+      "force_magnitude": 5.0,
+      "direction_rad": 4.71238898038469
+    },
+    {
+      "current_speed": 0.2,
+      "direction_deg": 0,
+      "force_magnitude": 10.0,
+      "direction_rad": 0.0
+    },
+    {
+      "current_speed": 0.2,
+      "direction_deg": 30,
+      "force_magnitude": 10.0,
+      "direction_rad": 0.5235987755982988
+    },
+    {
+      "current_speed": 0.2,
+      "direction_deg": 90,
+      "force_magnitude": 10.0,
+      "direction_rad": 1.5707963267948966
+    },
+    {
+      "current_speed": 0.2,
+      "direction_deg": 150,
+      "force_magnitude": 10.0,
+      "direction_rad": 2.6179938779914944
+    },
+    {
+      "current_speed": 0.2,
+      "direction_deg": 180,
+      "force_magnitude": 10.0,
+      "direction_rad": 3.141592653589793
+    },
+    {
+      "current_speed": 0.2,
+      "direction_deg": 270,
+      "force_magnitude": 10.0,
+      "direction_rad": 4.71238898038469
+    },
+    {
+      "current_speed": 0.3,
+      "direction_deg": 0,
+      "force_magnitude": 14.999999999999998,
+      "direction_rad": 0.0
+    },
+    {
+      "current_speed": 0.3,
+      "direction_deg": 30,
+      "force_magnitude": 14.999999999999998,
+      "direction_rad": 0.5235987755982988
+    },
+    {
+      "current_speed": 0.3,
+      "direction_deg": 90,
+      "force_magnitude": 14.999999999999998,
+      "direction_rad": 1.5707963267948966
+    },
+    {
+      "current_speed": 0.3,
+      "direction_deg": 150,
+      "force_magnitude": 14.999999999999998,
+      "direction_rad": 2.6179938779914944
+    },
+    {
+      "current_speed": 0.3,
+      "direction_deg": 180,
+      "force_magnitude": 14.999999999999998,
+      "direction_rad": 3.141592653589793
+    },
+    {
+      "current_speed": 0.3,
+      "direction_deg": 270,
+      "force_magnitude": 14.999999999999998,
+      "direction_rad": 4.71238898038469
+    },
+    {
+      "current_speed": 0.4,
+      "direction_deg": 0,
+      "force_magnitude": 20.0,
+      "direction_rad": 0.0
+    },
+    {
+      "current_speed": 0.4,
+      "direction_deg": 30,
+      "force_magnitude": 20.0,
+      "direction_rad": 0.5235987755982988
+    },
+    {
+      "current_speed": 0.4,
+      "direction_deg": 90,
+      "force_magnitude": 20.0,
+      "direction_rad": 1.5707963267948966
+    },
+    {
+      "current_speed": 0.4,
+      "direction_deg": 150,
+      "force_magnitude": 20.0,
+      "direction_rad": 2.6179938779914944
+    },
+    {
+      "current_speed": 0.4,
+      "direction_deg": 180,
+      "force_magnitude": 20.0,
+      "direction_rad": 3.141592653589793
+    },
+    {
+      "current_speed": 0.4,
+      "direction_deg": 270,
+      "force_magnitude": 20.0,
+      "direction_rad": 4.71238898038469
+    }
+  ],
+  "total_runs": 432,
+  "created_at": "2026-02-03T14:11:31.558427"
+}

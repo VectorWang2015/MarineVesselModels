@@ -1,0 +1,154 @@
+{
+  "param_stats": [
+    {
+      "reset_mode": "soft_reset",
+      "leakage": 0.003,
+      "mean_score": 0.21552033937883255,
+      "std_score": 0.0982745717473132,
+      "win_rate": 0.0,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "soft_reset",
+      "leakage": 0.001,
+      "mean_score": 0.22279944523912196,
+      "std_score": 0.13775992998268688,
+      "win_rate": 0.0,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "soft_reset",
+      "leakage": 0.0,
+      "mean_score": 0.22964870306651342,
+      "std_score": 0.13983390163385012,
+      "win_rate": 0.0,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "soft_reset",
+      "leakage": 0.005,
+      "mean_score": 0.23185390582556498,
+      "std_score": 0.0946494914865669,
+      "win_rate": 0.041666666666666664,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "hard_reset",
+      "leakage": 0.001,
+      "mean_score": 0.26997101651321936,
+      "std_score": 0.199353421327089,
+      "win_rate": 0.041666666666666664,
+      "n_scenarios": 24
+    },
+    {
+      "reset_mode": "hard_reset",
+      "leakage": 0.0,
+      "mean_score": 0.2734914041166536,
+      "std_score": 0.20007680755302298,
+      "win_rate": 0.2916666666666667,
+      "n_scenarios": 24
+    },
+    {
+      "reset_mode": "hard_reset",
+      "leakage": 0.003,
+      "mean_score": 0.27828006327118554,
+      "std_score": 0.19805303903405144,
+      "win_rate": 0.08333333333333333,
+      "n_scenarios": 24
+    },
+    {
+      "reset_mode": "hard_reset",
+      "leakage": 0.005,
+      "mean_score": 0.2883054999541615,
+      "std_score": 0.18875404565159903,
+      "win_rate": 0.0,
+      "n_scenarios": 24
+    },
+    {
+      "reset_mode": "no_reset",
+      "leakage": 0.003,
+      "mean_score": 0.31183645441374874,
+      "std_score": 0.3408247661184355,
+      "win_rate": 0.16666666666666666,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "no_reset",
+      "leakage": 0.005,
+      "mean_score": 0.3120152953089289,
+      "std_score": 0.29868614214773376,
+      "win_rate": 0.0,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "no_reset",
+      "leakage": 0.01,
+      "mean_score": 0.32540939792085255,
+      "std_score": 0.215443294284403,
+      "win_rate": 0.0,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "soft_reset",
+      "leakage": 0.01,
+      "mean_score": 0.32638141386033925,
+      "std_score": 0.12738849884290535,
+      "win_rate": 0.0,
+      "n_scenarios": 24
+    },
+    {
+      "reset_mode": "hard_reset",
+      "leakage": 0.01,
+      "mean_score": 0.34145279204165263,
+      "std_score": 0.19087356208160985,
+      "win_rate": 0.0,
+      "n_scenarios": 24
+    },
+    {
+      "reset_mode": "no_reset",
+      "leakage": 0.001,
+      "mean_score": 0.35058493305877025,
+      "std_score": 0.37514571042161854,
+      "win_rate": 0.08333333333333333,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "no_reset",
+      "leakage": 0.0,
+      "mean_score": 0.37197187382759384,
+      "std_score": 0.3972553672952732,
+      "win_rate": 0.2916666666666667,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "no_reset",
+      "leakage": 0.1,
+      "mean_score": 0.8002470857963171,
+      "std_score": 0.21515561779885317,
+      "win_rate": 0.0,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "soft_reset",
+      "leakage": 0.1,
+      "mean_score": 0.8028278873581066,
+      "std_score": 0.21911216663175098,
+      "win_rate": 0.0,
+      "n_scenarios": 22
+    },
+    {
+      "reset_mode": "hard_reset",
+      "leakage": 0.1,
+      "mean_score": 0.8039643202329241,
+      "std_score": 0.2244404644244637,
+      "win_rate": 0.0,
+      "n_scenarios": 22
+    }
+  ],
+  "total_scenarios": 24,
+  "total_parameter_combos": 18,
+  "scoring_weights": {
+    "cte_rmse": 0.7,
+    "cte_p95": 0.3
+  }
+}
