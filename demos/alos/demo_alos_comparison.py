@@ -4,11 +4,11 @@ import plot_utils
 
 from MarineVesselModels.simulator import NoisyVesselSimulator, SimplifiedEnvironmentalDisturbanceSimulator
 from MarineVesselModels.thrusters import NaiveDoubleThruster
-from MarineVesselModels.Fossen import sample_b_2, sample_hydro_params_2, sample_thrust_2, Fossen
+from MarineVesselModels.Fossen import sample_b_2, sample_hydro_params_2, sample_thrust_2, FossenWithCurrent
 from MarineVesselModels.noises import GaussMarkovNoiseGenerator
 
 from control.pid import DoubleLoopHeadingPID, PIDAW
-from control.los import LOSGuider, FixedDistLOSGuider, DynamicDistLOSGuider, AdaptiveLOSGuider
+from control.los import LOSGuider, FixedDistLOSGuider, DynamicDistLOSGuider, EnhancedAdaptiveLOSGuider
 
 
 def compute_cross_track_error(guider):
@@ -170,8 +170,8 @@ if __name__ == "__main__":
     velocity_line_length = 0.75  # meters
 
     # Environmental disturbance parameters
-    env_force_magnitude = 16.0  # Newtons
-    env_force_direction = np.pi/4*3  # radians (135°)
+    env_force_magnitude = 20  # Newtons
+    env_force_direction = 30 / 180 * np.pi  # radians (30°)
 
     # Setup noise generator (optional)
     tau_vec = np.array([60.0, 60.0, 30.0])  # s for X,Y,N
@@ -188,6 +188,10 @@ if __name__ == "__main__":
         {
             'name': 'Zigzag path',
             'waypoints': [(60, 15), (0, 30), (45, 45), (0, 60), (30, 75), (0, 90), (15, 105), (0, 120)],
+        },
+        {
+            'name': 'Zigzag path',
+            'waypoints': [(0, 0), (50, 50), (100, 0), (150, 50), (200, 0)],
         }
     ]
 
@@ -196,8 +200,8 @@ if __name__ == "__main__":
         ("Naive LOS", LOSGuider, {"output_err_flag": False}),
         ("Fixed LOS", FixedDistLOSGuider, {"output_err_flag": False, "los_dist": nominal_los_dist}),
         ("Dynamic LOS", DynamicDistLOSGuider, {"output_err_flag": False, "forward_dist": forward_dist}),
-        ("Adaptive LOS", AdaptiveLOSGuider, {"output_err_flag": False, "forward_dist": forward_dist,
-                                             "gamma": 0.005, "beta_hat0": 0.0, "dt": control_step}),
+        ("Adaptive LOS", EnhancedAdaptiveLOSGuider, {"output_err_flag": False, "forward_dist": forward_dist,
+                                                     "gamma":0.005, "sigma": 0.001, "alpha": 0.5, "beta_hat0": 0.0, "dt": control_step}),
     ]
 
     # Colors for different guiders
@@ -212,7 +216,7 @@ if __name__ == "__main__":
         scenario_name = scenario['name']
 
         # Create separate figure for each scenario (2x1 layout)
-        fig, axes = plt.subplots(2, 1, figsize=(12, 10))
+        fig, axes = plt.subplots(1, 2, figsize=(12, 10))
         ax_path, ax_err = axes.flatten()
 
         # Plot waypoints
@@ -250,7 +254,9 @@ if __name__ == "__main__":
                 time_step=time_step,
                 env_force_magnitude=env_force_magnitude,
                 env_force_direction=env_force_direction,
-                model=Fossen,
+                current_velocity=env_force_magnitude/50,
+                current_direction=env_force_direction,
+                model=FossenWithCurrent,
                 init_state=current_state,
             )
             thruster = NaiveDoubleThruster(b=sample_b_2)
